@@ -1,0 +1,598 @@
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt update
+sudo apt upgrade
+
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+setwd("/home/naoto/Data/scRNA/pred_hMLO/")
+getwd()
+
+library(Seurat)
+library(tidyverse)
+library(scRNAseq)
+library(scuttle)
+library(cowplot)
+library(ggsankey)
+library(scales)
+##############################################################################################################
+LM <- c(
+ "hOMTN","hRN", "hSert",
+ "hGaba",
+ "hDA0", "hDA1", "hDA2",
+ "hNbGaba","hNbML1","hNbML5","hNbM",
+ "hNProg","hProgFPM","hProgFPL","hProgBP","hProgM",
+ "hRgl1", "hRgl2a", "hRgl2b", "hRgl2c", "hRgl3","hOPC","hMgl",
+ "hPeric",
+ "hEndo")
+LM2 <- c(
+  "Neu","Neu","Neu",
+  "GABA",
+  "DANeu","DANeu","DANeu",
+  "NB","NB","NB","NB",
+  "Prog","Prog","Prog","Prog","Prog",
+  "RG","RG","RG","RG","RG","RG","RG",
+  "Peric","Endo")
+
+# LMBDの下準備
+  LMBD <- LaMannoBrainData('human-embryo')
+  LMBD <- logNormCounts(LMBD)
+  LMBD <- as.Seurat(LMBD)
+  Idents(LMBD) <- "Cell_type"
+
+  # Unkを抜く
+  LMBD <- subset(LMBD, idents = "Unk", invert = TRUE)
+  
+  Idents(LMBD) <- factor(Idents(LMBD), levels= LM)
+  Idents(LMBD) %>% levels()
+
+  names(LM2) <- levels(LMBD)
+  LMBD <- RenameIdents(LMBD, LM2)
+  LMBD$SimpleID <- Idents(LMBD)
+
+  LMBD <- NormalizeData(LMBD, normalization.method = "LogNormalize", scale.factor = 10000)
+  LMBD <- FindVariableFeatures(LMBD, selection.method = "vst", nfeatures = 2000)
+  all.genes <- rownames(LMBD)
+  LMBD <- ScaleData(LMBD, features = all.genes)
+  LMBD <- RunPCA(LMBD, features = VariableFeatures(object = LMBD))
+  LMBD <- RunUMAP(LMBD, dims = 1:20, reduction = "pca", seed.use = 42)
+
+saveRDS(LMBD, file = "LMBD_UMAP_simple_annotation.rds")
+##############################################################################################################
+
+Mohamed <- readRDS("/home/naoto/Data/scRNA/Mohamed/moh_v5_single_annotated2.rds")
+Patikas <- readRDS("/home/naoto/Data/scRNA/Patik/patik_cor&x3_V5_sep_single_annotated.rds")
+Walter <- readRDS("/home/naoto/Data/scRNA/Walter/walter_V5_d14_harmony_annotated.rds")
+Zagare <- readRDS("/home/naoto/Data/scRNA/Zagare/zagare_70d_v5_single_annotated.rds")
+
+list <- NULL
+ list$Walter <- Walter
+ list$Mohamed <- Mohamed
+ list$Zagare <- Zagare
+ list$Patikas <- Patikas
+ list
+
+  # saveRDS(list, file = "MLO_GABA_DAN.rds")
+  # 時間がかかるので保存しなくてもよい気がする
+##############################################################################################################
+# LMBD$Cell_type オリジナルのannotation
+# LMBD$SimpleID Zagareに準拠, GABAだけ取り出した
+#LMBD <- readRDS("LMBD_UMAP_simple_annotation.rds")
+#result <- readRDS("MLO_GABA_DAN.rds")
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+sLM_levels <- c("Neu","GABA","DANeu","NB","RG","OPC","Mgl","Prog","Peric","Endo")
+ sLM_levels <- factor(sLM_levels, levels=(sLM_levels))
+
+result <- list
+
+for (j in MLO) {
+ print(j)
+ query <- result[[j]]
+    sup <- LMBD
+    anchors <- FindTransferAnchors(reference = sup, query = query, dims = 1:20, reference.reduction = "pca")
+    predictions <- TransferData(anchorset = anchors, refdata = sup$SimpleID, dims = 1:20)
+    query <- AddMetaData(query, metadata = predictions$predicted.id, col.name = "simple.LM")
+    query$simple.LM<- factor(query$simple.LM, levels= sLM_levels)
+  result[[j]] <- query
+}
+
+#    predictions <- TransferData(anchorset = anchors, refdata = sup$Cell_type, dims = 1:20)
+#    query <- AddMetaData(query, metadata = predictions$predicted.id, col.name = "pred.LM")
+#    query$pred.LM<- factor(query$pred.LM, levels= LM_levels)
+
+# saveRDS(result, file = "predicted_MLO_LM.rds")
+##############################################################################################################
+# ついで、Kamathにpredictionさせる
+#result <- readRDS("predicted_MLO_LM.rds")
+
+kamath <- readRDS("/home/naoto/Data/scRNA/Kamath/Kam80k_v4_single_annotated.rds")
+kamath$orig.ID <- kamath$Kamath2
+Idents(kamath) <- "orig.ID"
+
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+my_levels <- factor(my_levels, levels=(my_levels))
+
+for (i in MLO) {
+    print(i)
+    query <- result[[i]]
+    sup <- kamath
+    anchors <- FindTransferAnchors(reference = sup, query = query, dims = 1:30, reference.reduction = "pca")
+    predictions <- TransferData(anchorset = anchors, refdata = sup@active.ident, dims = 1:30)
+    query <- AddMetaData(query, metadata = predictions$predicted.id, col.name = "pred.Kam")
+    query$pred.Kam<- factor(query$pred.Kam, levels= my_levels)
+ result[[i]] <- query
+}
+
+saveRDS(result, file = "predicted_hMLO_LM_Kam.rds")
+##############################################################################################################
+#result <- readRDS("predicted_hMLO_LM_Kam.rds")
+
+# orig.ident, LaManno, Kamathを比較する
+$ orig.ID
+$ pred.Kam
+$ pred.LM
+$ simple.LM
+# を比較するということとなる
+
+pcols <- c(
+ "Neu"="pink1",
+ "Neuron"="pink1",
+ "mNeu"="orchid2",
+ "ExNeu"="pink3",
+ "InhNeu"="sienna1",
+ "GABA"="sienna1",
+ "SERT"="pink1",
+ "OMTN"="pink2",
+ "RN"="pink3",
+ "DANeu"="deeppink",
+ "NB"="cyan3",
+ "imNeu"="cyan3",
+ "RG"="steelblue3",
+ "RG1"="steelblue1",
+ "RG2"="steelblue3",
+ "RGa"="steelblue1",
+ "RGo"="steelblue3",
+ "Astro"="steelblue1",
+ "Oligo"="turquoise4",
+ "OPC"="turquoise3",
+ "Mgl"="orchid4",
+ "T"="khaki3",
+ "Prog"="olivedrab3",
+ "Peric"="sienna2",
+ "Endo"="thistle3",
+ "Unk"="ivory3"
+ )
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+
+df <- NULL
+
+for (j in MLO) {
+  print(j)
+  query <- result[[j]]
+
+  df1<- query$orig.ID %>% data.frame
+  colnames(df1) <- "orig.ID"
+  df1 <- rownames_to_column(df1, "cell.id")
+
+  df2 <- query@meta.data$simple.LM %>% data.frame
+  colnames(df2) <- "simple.LM" 
+  
+  df3 <- query@meta.data$pred.Kam %>% data.frame
+  colnames(df3) <- "pred.Kam" 
+  
+  df[[j]]  <- data.frame(df1 ,df2, df3)
+ }
+
+ sf <- df
+ ggs <- NULL
+ pred <- c("simple.LM", "orig.ID", "pred.Kam")
+
+ pred_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","SERT","OMTN","RN","GABA","DAN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+ pred_levels <- factor(pred_levels, levels=(pred_levels))
+
+for (i in MLO) {
+  sf <- df[[i]]
+  sf <- sf %>% make_long(pred)
+  sf$node <- factor(sf$node, levels= pred_levels)%>% fct_rev()
+
+  ggs[[i]] <- ggplot(sf, aes(x = x, 
+                 next_x = next_x, 
+                 node = node, 
+                 next_node = next_node,
+                 fill = factor(node),
+                 label = node)) +
+    geom_sankey(flow.alpha = 0.5, node.color = 1) +
+    geom_sankey_label(size = 4, color = "black") +
+    scale_fill_manual(values = pcols) +
+    scale_x_discrete(labels =c("La Manno ID","Original ID","Kamath ID")) +
+    labs(title = NULL, x=NULL) +
+    theme_sankey(base_size = 25) +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none",
+      axis.text.x=element_text(size=12),
+      axis.title.x=element_text(size=12),
+      title=element_text(size =12, face = "bold")) +
+    labs(title = i, x=NULL)
+}
+
+
+ dev.new(width=17, height=5)
+ plot_grid(ggs[[1]], ggs[[2]], ggs[[3]], ggs[[4]], align = "v",
+ rel_widths = c(.1, .1, .1, .1), ncol = 4)
+ ggsave(file = "pred_Sankey.png")
+ dev.off()
+##############################################################################################################
+# SCPA発動する
+# simpleLMにもとづいて
+# list <- readRDS("predicted_hMLO_LM_Kam.rds")
+
+library(SCPA)
+library(msigdbr)
+library(tidyverse)
+library(cowplot)
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+pred <- c("simple.LM", "orig.ID", "pred.Kam")
+pred_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+pred_levels <- factor(pred_levels, levels=(pred_levels))
+
+path <- NULL
+path$GOBP.pathways <- msigdbr("Homo sapiens", "C5", "BP") %>% format_pathways()
+path$Hallmark.pathways <- msigdbr("Homo sapiens", "H") %>% format_pathways()
+path$Biocarta.pathways <- msigdbr("Homo sapiens", "C2", "CP:BIOCARTA") %>% format_pathways()
+path$KEGG.pathways <- msigdbr("Homo sapiens", "C2", "CP:KEGG") %>% format_pathways()
+path$Reactome.pathways <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") %>% format_pathways()
+##################################################
+# LaMannoはSimple LaMannoを使用
+
+pathways <- c("GOBP.pathways", "Hallmark.pathways", "Biocarta.pathways", "KEGG.pathways","Reactome.pathways")
+result.sLM <- NULL
+IDs <- NULL
+ IDs$Mohamed <- c("Neu","GABA","NB","RG","Prog")
+ IDs$Patikas <- c("Neu","GABA","DANeu","NB","RG","Prog","Endo")
+ IDs$Walter <- c("Neu","GABA","DANeu","NB","Prog")
+ IDs$Zagare <- c("Neu","GABA","DANeu","NB","RG","Prog")
+meta.wt <- NULL
+ meta.wt$Mohamed <- "KO"
+ meta.wt$Patikas <- "SNCAc"
+ meta.wt$Walter <- "WT" 
+ meta.wt$Zagare <- "WT"
+meta.mut <- NULL
+ meta.mut$Mohamed <- "SNCA"
+ meta.mut$Patikas <- "SNCAx3"
+ meta.mut$Walter <- "G2019S"
+ meta.mut$Zagare <- "G2019S"
+
+for (k in MLO) {
+  print(k)
+  data <- list[[k]]
+  cellID <- IDs[[k]]
+  result <- NULL
+  for (i in cellID) {
+    for (j in pathways) {
+    wt <- seurat_extract(data,
+                          meta1 = "simple.LM", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.wt[[k]])
+
+    mut<- seurat_extract(data,
+                          meta1 = "simple.LM", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.mut[[k]])
+    rest_act <- compare_pathways(samples = list (wt, mut), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result[[i]][[j]] <- rest_act
+  }}
+ result.sLM[[k]] <- result
+ }
+
+saveRDS(result.sLM, file = "SCPA_MLO_sLM.rds") #ここにSCPA/LaMannoの結果が入っている
+##############################################################################################################
+# 図の作成
+# LaManno
+#"Reactome.pathways"
+# result.sLM <- readRDS("SCPA_MLO_sLM.rds")
+ggr <- NULL
+for (k in MLO) {
+  cellID <- IDs[[k]]
+  for (i in cellID) {
+for (i in cellID) {
+ rest_act <- result.sLM[[k]][[i]][["Reactome.pathways"]] %>% data.frame
+  rest_act <- rest_act %>%
+  mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'steelblue3',
+                           FC < 5 & FC > -5 & adjPval < 0.01 ~ 'lightgoldenrod3',
+                           FC < -5 & adjPval < 0.01 ~ 'hotpink3',
+                           FC < 5 & FC > -5 & adjPval > 0.01 ~ 'grey'))
+  title <- paste(i, sep = "")
+  ggr[[k]][[i]] <- ggplot(rest_act, aes(-FC, qval)) +
+    geom_vline(xintercept = c(-5, 5), linetype = "dashed", col = 'black', lwd = 0.3) +
+    geom_point(cex = 1, color = rest_act$color, stroke = 0.3) +
+    labs(x="Enrichment", y="Qval", title= title, colour =NULL) +
+    theme(panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        title=element_text(size =12),
+        legend.text=element_text(size =10), 
+        axis.text.x=element_text(size=8), 
+        axis.text.y=element_text(size=8), 
+        axis.title.x=element_text(size=10),
+        axis.title.y=element_text(size=10, vjust = -4),
+        aspect.ratio = 1)
+　}}}
+
+label <- NULL
+ label$Mohamed <- "MO-PARK4-1"
+ label$Patikas <- "MO-PARK4-2"
+ label$Walter <- "MO-PARK8-1"
+ label$Zagare <- "MO-PARK8-2"
+
+left.panel <- NULL
+for (i in MLO) {
+ left.panel[[i]] <- ggdraw() + 
+    draw_label(
+      label[[i]],
+      fontface = 'bold',
+      hjust = 0.5, vjust = -0.5,
+      size = 14, angle = 90) 
+}
+
+GGL <- plot_grid(
+     left.panel[[1]], ggr[[1]][["Neu"]], ggr[[1]][["GABA"]], ggr[[1]][["DANeu"]], ggr[[1]][["NB"]], ggr[[1]][["RG"]], ggr[[1]][["Prog"]], ggr[[1]][["Endo"]], 
+     left.panel[[2]], ggr[[2]][["Neu"]], ggr[[2]][["GABA"]], ggr[[2]][["DANeu"]], ggr[[2]][["NB"]], ggr[[2]][["RG"]], ggr[[2]][["Prog"]], ggr[[2]][["Endo"]], 
+     left.panel[[3]], ggr[[3]][["Neu"]], ggr[[3]][["GABA"]], ggr[[3]][["DANeu"]], ggr[[3]][["NB"]], ggr[[3]][["RG"]], ggr[[3]][["Prog"]], ggr[[3]][["Endo"]], 
+     left.panel[[4]], ggr[[4]][["Neu"]], ggr[[4]][["GABA"]], ggr[[4]][["DANeu"]], ggr[[4]][["NB"]], ggr[[4]][["RG"]], ggr[[4]][["Prog"]], ggr[[4]][["Endo"]], 
+     align = "hv",
+ rel_widths = c(.03, .1, .1, .1, .1, .1, .1, .1), ncol = 8, 
+ rel_heights = c(.1, .1, .1, .1))
+
+##############################################################################################################
+# Kamath
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+pathways <- c("GOBP.pathways", "Hallmark.pathways", "Biocarta.pathways", "KEGG.pathways","Reactome.pathways")
+
+result.MB <- NULL
+
+IDk <- NULL
+ IDk$Mohamed <- c("mNeu","InhNeu", "DANeu", "Astro", "Oligo", "Endo")
+ IDk$Patikas <- c("Neuron","mNeu", "DANeu", "Astro", "OPC", "Oligo", "Endo")
+ IDk$Walter <- c("DANeu", "Oligo")
+ IDk$Zagare <- c("DANeu", "Astro", "Oligo")
+meta.wt <- NULL
+ meta.wt$Mohamed <- "KO"
+ meta.wt$Patikas <- "SNCAc"
+ meta.wt$Walter <- "WT" 
+ meta.wt$Zagare <- "WT"
+meta.mut <- NULL
+ meta.mut$Mohamed <- "SNCA"
+ meta.mut$Patikas <- "SNCAx3"
+ meta.mut$Walter <- "G2019S"
+ meta.mut$Zagare <- "G2019S"
+
+for (k in MLO) {
+  print(k)
+  data <- list[[k]]
+  cellID <- IDk[[k]]
+  result <- NULL
+  for (i in cellID) {
+    for (j in pathways) {
+    wt <- seurat_extract(data,
+                          meta1 = "pred.Kam", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.wt[[k]])
+
+    mut<- seurat_extract(data,
+                          meta1 = "pred.Kam", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.mut[[k]])
+    rest_act <- compare_pathways(samples = list (wt, mut), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result[[i]][[j]] <- rest_act
+  }}
+result.MB[[k]] <- result
+}
+
+saveRDS(result.MB, file = "SCPA_full.rds") #ここにSCPA/Kamathの結果が入っている
+##############################################################################################################
+# 図の作成
+# result.MB <- readRDS("SCPA_full.rds")
+#"Reactome.pathways"
+ggk <- NULL
+for (k in MLO) {
+  cellID <- IDk[[k]]
+  for (i in cellID) {
+ rest_act <- result.MB[[k]][[i]][["Reactome.pathways"]] %>% data.frame
+  rest_act <- rest_act %>%
+  mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'steelblue3',
+                           FC < 5 & FC > -5 & adjPval < 0.01 ~ 'lightgoldenrod3',
+                           FC < -5 & adjPval < 0.01 ~ 'hotpink3',
+                           FC < 5 & FC > -5 & adjPval > 0.01 ~ 'grey'))
+  title <- paste(i, sep = "")
+  ggk[[k]][[i]] <- ggplot(rest_act, aes(-FC, qval)) +
+    geom_vline(xintercept = c(-5, 5), linetype = "dashed", col = 'black', lwd = 0.3) +
+    geom_point(cex = 1, color = rest_act$color, stroke = 0.3) +
+    labs(x="Enrichment", y="Qval", title= title, colour =NULL) +
+    theme(panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        title=element_text(size =12),
+        legend.text=element_text(size =10), 
+        axis.text.x=element_text(size=8), 
+        axis.text.y=element_text(size=8), 
+        axis.title.x=element_text(size=10),
+        axis.title.y=element_text(size=10, vjust = -4),
+        aspect.ratio = 1)
+}}
+
+label <- NULL
+ label$Mohamed <- "MO-PARK4-1"
+ label$Patikas <- "MO-PARK4-2"
+ label$Walter <- "MO-PARK8-1"
+ label$Zagare <- "MO-PARK8-2"
+
+left.panel <- NULL
+for (i in MLO) {
+ left.panel[[i]] <- ggdraw() + 
+    draw_label(
+      label[[i]],
+      fontface = 'bold',
+      hjust = 0.5, vjust = -0.7,
+      size = 14, angle = 90) 
+}
+
+GGK <- plot_grid(
+     left.panel[[1]], ggk[[1]][["Neuron"]], ggk[[1]][["mNeu"]], ggk[[1]][["InhNeu"]], ggk[[1]][["DANeu"]], ggk[[1]][["Astro"]], ggk[[1]][["OPC"]], ggk[[1]][["Oligo"]], ggk[[1]][["Endo"]],
+     left.panel[[2]], ggk[[2]][["Neuron"]], ggk[[2]][["mNeu"]], ggk[[2]][["InhNeu"]], ggk[[2]][["DANeu"]], ggk[[2]][["Astro"]], ggk[[2]][["OPC"]], ggk[[2]][["Oligo"]], ggk[[2]][["Endo"]],
+     left.panel[[3]], ggk[[3]][["Neuron"]], ggk[[3]][["mNeu"]], ggk[[3]][["InhNeu"]], ggk[[3]][["DANeu"]], ggk[[3]][["Astro"]], ggk[[3]][["OPC"]], ggk[[3]][["Oligo"]], ggk[[3]][["Endo"]],
+     left.panel[[4]], ggk[[4]][["Neuron"]], ggk[[4]][["mNeu"]], ggk[[4]][["InhNeu"]], ggk[[4]][["DANeu"]], ggk[[4]][["Astro"]], ggk[[4]][["OPC"]], ggk[[4]][["Oligo"]], ggk[[4]][["Endo"]],
+     align = "hv",
+ rel_widths = c(.03, .1, .1, .1, .1, .1, .1, .1, .1), ncol = 9, 
+ rel_heights = c(.1, .1, .1, .1))
+##############################################################################################################
+# Original
+# こんかいReactomeだけやったのであとでもういちど
+pathways <- c("GOBP.pathways", "Hallmark.pathways", "Biocarta.pathways", "KEGG.pathways","Reactome.pathways")
+result.orig <- NULL
+
+orig.levels <- c("Neu","GABA","DANeu","RGa","RGo","Prog","Peric","Endo","Unk")
+orig.levels <- factor(orig.levels, levels=(orig.levels))
+
+IDo <- NULL
+ IDo$Mohamed <- c("Neu","GABA","DANeu","imNeu","RGa","RGo","Prog","Endo")
+ IDo$Patikas <- c("Neu","GABA","DANeu","RGo","Prog","Endo")
+ IDo$Walter <- c("Neu","GABA","DANeu","RGo","Prog","Endo")
+ IDo$Zagare <- c("DANeu","RGa","RGo")
+meta.wt <- NULL
+ meta.wt$Mohamed <- "KO"
+ meta.wt$Patikas <- "SNCAc"
+ meta.wt$Walter <- "WT" 
+ meta.wt$Zagare <- "WT"
+meta.mut <- NULL
+ meta.mut$Mohamed <- "SNCA"
+ meta.mut$Patikas <- "SNCAx3"
+ meta.mut$Walter <- "G2019S"
+ meta.mut$Zagare <- "G2019S"
+
+for (k in MLO) {
+  data <- list[[k]]
+  cellID <- IDo[[k]]
+  result <- NULL
+  for (i in cellID) {
+    print(k)
+    for (j in pathways) {
+    wt <- seurat_extract(data,
+                          meta1 = "orig.ID", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.wt[[k]])
+
+    mut<- seurat_extract(data,
+                          meta1 = "orig.ID", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = meta.mut[[k]])
+    rest_act <- compare_pathways(samples = list (wt, mut), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result[[i]][[j]] <- rest_act
+  }}
+result.orig[[k]] <- result
+}
+
+saveRDS(result.orig, file = "SCPA_orig.rds")
+##############################################################################################################
+# 図の作成
+# result.orig <- readRDS("SCPA_orig.rds")
+#"Reactome.pathways"
+ggo <- NULL
+for (k in MLO) {
+  cellID <- IDo[[k]]
+  for (i in cellID) {
+  rest_act <- result.orig[[k]][[i]][["Reactome.pathways"]] %>% data.frame
+  rest_act <- rest_act %>%
+  mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'steelblue3',
+                           FC < 5 & FC > -5 & adjPval < 0.01 ~ 'lightgoldenrod3',
+                           FC < -5 & adjPval < 0.01 ~ 'hotpink3',
+                           FC < 5 & FC > -5 & adjPval > 0.01 ~ 'grey'))
+  title <- paste(i, sep = "")
+  ggo[[k]][[i]] <- ggplot(rest_act, aes(-FC, qval)) +
+    geom_vline(xintercept = c(-5, 5), linetype = "dashed", col = 'black', lwd = 0.3) +
+    geom_point(cex = 1, color = rest_act$color, stroke = 0.3) +
+    labs(x="Enrichment", y="Qval", title= title, colour =NULL) +
+    theme(panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        title=element_text(size =12),
+        legend.text=element_text(size =10), 
+        axis.text.x=element_text(size=8), 
+        axis.text.y=element_text(size=8), 
+        axis.title.x=element_text(size=10),
+        axis.title.y=element_text(size=10, vjust = -2),
+        aspect.ratio = 1)
+}}
+
+label <- NULL
+ label$Mohamed <- "MO-PARK4-1"
+ label$Patikas <- "MO-PARK4-2"
+ label$Walter <- "MO-PARK8-1"
+ label$Zagare <- "MO-PARK8-2"
+left.panel <- NULL
+for (i in MLO) {
+ left.panel[[i]] <- ggdraw() + 
+    draw_label(
+      label[[i]],
+      fontface = 'bold',
+      hjust = 0.5, vjust = -0.5,
+      size = 14, angle = 90) 
+}
+
+GGO <- plot_grid(
+     left.panel[[1]], ggo[[1]][["Neu"]], ggo[[1]][["GABA"]], ggo[[1]][["DANeu"]], ggo[[1]][["imNeu"]], ggo[[1]][["RGa"]], ggo[[1]][["RGo"]], ggo[[1]][["Prog"]], ggo[[1]][["Endo"]],
+     left.panel[[2]], ggo[[2]][["Neu"]], ggo[[2]][["GABA"]], ggo[[2]][["DANeu"]], ggo[[2]][["imNeu"]], ggo[[2]][["RGa"]], ggo[[2]][["RGo"]], ggo[[2]][["Prog"]], ggo[[2]][["Endo"]],
+     left.panel[[3]], ggo[[3]][["Neu"]], ggo[[3]][["GABA"]], ggo[[3]][["DANeu"]], ggo[[3]][["imNeu"]], ggo[[3]][["RGa"]], ggo[[3]][["RGo"]], ggo[[3]][["Prog"]], ggo[[3]][["Endo"]],
+     left.panel[[4]], ggo[[4]][["Neu"]], ggo[[4]][["GABA"]], ggo[[4]][["DANeu"]], ggo[[4]][["imNeu"]], ggo[[4]][["RGa"]], ggo[[4]][["RGo"]], ggo[[4]][["Prog"]], ggo[[4]][["Endo"]],
+     align = "hv",
+rel_widths = c(.03, .1, .1, .1, .1, .1, .1, .1, .1), ncol = 9, 
+rel_heights = c(.1, .1, .1, .1))
+##############################################################################################################
+LP1 <- ggdraw() + draw_label("Original ID",
+      fontface = 'bold', hjust = 0.5, vjust = -0.5, size = 16, angle = 90) 
+LP2 <- ggdraw() + draw_label("Fetal brain ID",
+      fontface = 'bold', hjust = 0.5, vjust = -0.5, size = 16, angle = 90) 
+LP3 <- ggdraw() + draw_label("Postmortem brain ID",
+      fontface = 'bold', hjust = 0.5, vjust = -0.5, size = 16, angle = 90) 
+
+dev.new(width=12, height=6)
+ plot_grid(
+    LP1, GGO,
+ rel_widths = c(.01, .1), ncol = 2)
+ggsave(file = "Reactome_summary_1.png")
+dev.off()
+
+dev.new(width=12, height=6)
+ plot_grid(
+    LP2, GGL,
+ rel_widths = c(.01, .1), ncol = 2)
+ggsave(file = "Reactome_summary_2.png")
+dev.off()
+
+dev.new(width=12, height=6)
+ plot_grid(
+    LP3, GGK,
+ rel_widths = c(.01, .1), ncol = 2)
+ggsave(file = "Reactome_summary_3.png")
+dev.off()
+##############################################################################################################
+library(magick)
+
+  img1 <- image_read("Reactome_summary_1.png") %>% image_resize(geometry = "1200x")
+  img2 <- image_read("Reactome_summary_2.png") %>% image_resize(geometry = "1200x")
+  img3 <- image_read("Reactome_summary_3.png") %>% image_resize(geometry = "1200x")
+
+  img1 <- image_annotate(img1, text = "A", location = "+0+0", size = 40, color = "black")
+  img2 <- image_annotate(img2, text = "B", location = "+0+0", size = 40, color = "black")
+  img3 <- image_annotate(img3, text = "C", location = "+0+0", size = 40, color = "black")
+
+  img <- image_append(c(img1, img2, img3), stack = T)
+image_write(img, "suppl7.png", format = "png")
+##############################################################################################################
