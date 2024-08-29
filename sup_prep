@@ -166,3 +166,432 @@ dev.new(width=11, height=13)
             ncol =1, rel_heights = c(.01, .1, .1,.1, .1, .1, .1))
   ggsave(file="MBSN_list.png")
   dev.off()
+
+##############################################################################################################
+# Prediction
+# query = j
+# prediction =i
+##############################################################################################################
+
+MBSN <- c("Kamath","Smajic","Wang","Martirosyan","Lee","Agarwal")
+
+df <-NULL
+result <-NULL
+
+for (j in MBSN) {
+  print(j)
+  query <- list[[j]]
+  df[[j]] <- query$orig.ID %>% data.frame
+  colnames(df[[j]] ) <- "orig.ID" 
+  df[[j]]  <- rownames_to_column(df[[j]], "cell.id")
+
+  for (i in MBSN) {
+    sup <- list[[i]]
+    anchors <- FindTransferAnchors(reference = sup, query = query, dims = 1:30, reference.reduction = "pca")
+    predictions <- TransferData(anchorset = anchors, refdata = sup$orig.ID, dims = 1:30)
+    query <- AddMetaData(query, metadata = predictions$predicted.id, col.name = paste(i))
+
+    df2 <- query@meta.data[[i]] %>% data.frame
+    colnames(df2) <- i
+    df[[j]]  <- data.frame(df[[j]] ,df2)
+    }
+  result[[j]] <- query
+  }
+
+saveRDS(df, file = "predicted_annotation.rds")
+saveRDS(result, file = "predicted_SNMB.rds")
+
+# blur version
+library(ggfx)
+library(viridis)
+#result <- readRDS("predicted_SNMB.rds")
+
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","Prog","Peric","Endo","T","Unk")
+  my_levels <- factor(my_levels, levels=(my_levels))
+
+ gg <- NULL
+ ggg <- NULL
+ up <- NULL
+for (j in MBSN) {
+  query <- result[[j]]
+  for (i in MBSN) {
+    table <- table(query@meta.data[[i]] ,query$orig.ID)
+    table <- data.frame(table/rowSums(table))
+    table$Var1 <- factor(table$Var1, levels= my_levels)
+    table$Var2 <- factor(table$Var2, levels= my_levels)  %>% fct_rev()
+
+    title <- paste("supervised by ", label4[[i]], sep = "")
+
+    gg[[i]] <- ggplot(table, aes(x = Var1, y = Var2, fill =Freq)) +
+        with_blur(geom_tile(), sigma = 5) +
+        scale_fill_viridis(option = "inferno", discrete = FALSE, direction = 1) +
+        theme_bw() +
+        labs(x=NULL, y=NULL, title= title) +
+    theme(legend.position = "none",
+          title=element_blank(),
+          axis.text.x=element_text(size=7, angle = 45, hjust = 1), 
+          axis.text.y=element_text(size=7),
+          axis.title=element_text(size=10))
+  }
+  title2 <- paste("query: \n", label4[[j]], sep = "")
+  left.panel <- ggdraw() + 
+    draw_label(
+      title2,
+      fontface = 'bold',
+      hjust = 0, vjust = 0.4,
+      size = 12, angle = 90) 
+ 
+  ggg[[j]] <- plot_grid(left.panel, gg[[1]],gg[[2]],gg[[3]],gg[[4]],gg[[5]],gg[[6]], align = "v",
+                        rel_widths = c(.04, .1, .1, .1, .1, .1, .1), ncol = 7)
+
+  up[[j]] <- ggdraw() + 
+      draw_label(
+        paste("supervised by ", label4[[j]], sep = ""),
+        fontface = 'bold', size = 10, 
+        hjust = 0.45, vjust = 0) 
+  }
+
+upper.panel <- plot_grid(NULL, up[[1]],up[[2]],up[[3]],up[[4]],up[[5]],up[[6]], align = "v",
+                         rel_widths = c(.04, .1, .1, .1, .1, .1, .1), ncol = 7)
+############################################################################
+# sensitivity and specificity as a supervisor
+
+# k: supervised hMLO
+# j: query
+
+cell.type <-  c("Neuron","mNeu","ExNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo", "T")
+MBSN <- factor(MBSN, levels = MBSN)
+df <- readRDS("predicted_annotation.rds")
+
+# Sensitivity
+XX2 <- NULL
+for (k in MBSN) {
+     XX1 <- NULL
+     XX1 <- data.frame(MBSN)
+    for (i in cell.type) {
+         X1 <- NULL
+         X2 <- NULL
+        for (j in MBSN) {
+         C <- df[[j]] %>% filter(df[[j]]$orig.ID == df[[j]][[k]]) %>% filter(orig.ID == i) %>% nrow()
+         B <- sum(df[[j]]$orig.ID == i)
+         sum <- C/B
+         X1 <- c(X1, sum)
+        }
+     XX1 <- data.frame(XX1, X1)
+     XX1 <- rename(XX1, !!i :=X1)
+    }
+  XX1$pred <- k
+  XX2 <- rbind(XX2, XX1)
+}
+SE <- XX2
+
+# Specificity
+XX2 <- NULL
+for (k in MBSN) {
+     XX1 <- NULL
+     XX1 <- data.frame(MBSN)
+    for (i in cell.type) {
+         X1 <- NULL
+         X2 <- NULL
+        for (j in MBSN) {
+         C <- df[[j]] %>% filter(df[[j]]$orig.ID == df[[j]][[k]]) %>% filter(orig.ID == i) %>% nrow()
+         A <- sum(df[[j]][[k]] == i)
+         sum <- C/A
+         X1 <- c(X1, sum)
+        }
+     XX1 <- data.frame(XX1, X1)
+     XX1 <- rename(XX1, !!i :=X1)
+    }
+  XX1$pred <- k
+  XX2 <- rbind(XX2, XX1)
+}
+SP <- XX2
+
+
+#まとめる
+acols <- c(
+      "MB-1" = "deeppink3",
+      "MB-2" = "turquoise3",
+      "SN-1" = "slateblue1",
+      "SN-2" = "olivedrab4",
+      "SN-3" = "ivory4",
+      "SN-4" = "sienna2")
+
+g <- NULL
+sum <- NULL
+for (j in cell.type) {
+ SEF <- NULL
+  for (i in MBSN) {
+   temp <- SE %>% filter(pred == i)
+   SEF <- c(SEF, temp[[j]] %>% na.omit() %>% median())
+  }
+ SPF <- NULL
+  for (i in MBSN) {
+   temp <- SP %>% filter(pred == i)
+   SPF <- c(SPF, temp[[j]] %>% na.omit() %>% median())
+  }
+
+ sum[[j]] <- data.frame(label = c("MB-1", "MB-2", "SN-1", "SN-2", "SN-3", "SN-4"), sensitivity=SEF, specificity=SPF)
+ sum[[j]] <- sum[[j]] %>% na.omit()
+
+ g[[j]] <- ggplot(sum[[j]], aes(x = specificity, y = sensitivity, label = label)) +
+       geom_point(size =1.5, aes(color = factor(label))) +
+       theme_bw() + 
+       geom_text_repel() +
+       labs(title= j) + 
+       scale_color_manual(values= acols) +
+       scale_x_continuous(limits=c(0,1)) +
+       scale_y_continuous(limits=c(0,1)) +
+       theme(legend.position = "none")
+}
+
+
+legend <- cowplot::get_legend(
+    ggplot(sum[[1]], aes(x = specificity, y = sensitivity, label = label)) +
+       geom_point(size =3, aes(color = factor(label))) +
+       theme_bw() +        
+       theme(legend.text=element_text(size =15)) +
+       scale_color_manual(values= acols) +
+       labs(x=NULL, y=NULL, title=NULL, color=NULL))
+##############################################################################################################
+# Fig. 2
+upper <-  plot_grid(upper.panel, ggg[[1]],ggg[[2]],ggg[[3]],ggg[[4]],ggg[[5]],ggg[[6]], align = "v",
+ rel_heights = c(.02, .1, .1, .1, .1, .1, .1), ncol = 1)
+
+lower <- plot_grid(
+      NULL, g[[1]], g[[2]], g[[3]], g[[4]], NULL, 
+      NULL, g[[5]], g[[6]], g[[7]], g[[8]],NULL, 
+      NULL, g[[9]], g[[10]],g[[11]], legend,NULL, 
+      align = "hv",
+      rel_widths = c(.03, .1, .1, .1, .1, .1), 
+      rel_heights = c(.1, .1, .1), 
+      ncol = 6)
+
+dev.new(width=11, height=13)
+  plot_grid(upper, lower, align = "hv", rel_heights = c(.6, .4), ncol =1,
+            labels = c("A", "B"),
+            label_x = .005, label_y = 1.0, label_size = 20)
+  ggsave(file = "tile_dot.png")
+  dev.off()
+##############################################################################################################
+# Fig. 3
+# After prediction
+# result <- readRDS("predicted_SNMB.rds")
+
+MBSN <- c("Kamath","Smajic","Wang","Martirosyan","Lee","Agarwal")
+markers.to.plot.sm <- c("EGR4", "LEXM", "LHX9","PAX5",
+  "POSTN","DRGX","HOXA3",
+  "GAD2","CASR","DDC", "TH", "SLC6A3","SLC18A2",      
+  "FRMPD2","AQP4", "FOLH1","MOBP","VCAN","COL9A1",
+  "RGS1","GPR65","CD86",
+  "SLC6A20","COL6A3","C7","ELTD1","CD34","SKAP1")
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","Prog","Peric","Endo","T","Unk")
+  my_levels <- factor(my_levels, levels=(my_levels))
+
+label4 <- NULL
+  label4$Kamath <- "MB-1"
+  label4$Smajic <- "MB-2"
+  label4$Wang <- "SN-1"
+  label4$Martirosyan <- "SN-2"
+  label4$Lee <- "SN-3"
+  label4$Agarwal <- "SN-4"
+
+label5 <- NULL
+  label5$Kamath <- c("A", "B", "C")
+  label5$Smajic <- c("D", "E", "F")
+  label5$Wang <- c("G", "H", "I")
+  label5$Martirosyan <- c(" J", "K", "L")
+  label5$Lee <- c("M", "N", "O")
+  label5$Agarwal <- c("P", "Q", "R")
+
+ggd <- NULL
+for (i in MBSN) {
+    data <- result[[i]]
+    Idents(data) <- "Kamath"
+    Idents(data) <- factor(Idents(data), levels= my_levels) 
+
+    prop_cluster <- prop.table(x=table(data@active.ident))
+    df <- data.frame(prop_cluster)
+    df$Var2 <- factor(df$Var1, levels =  my_levels)
+    df <- na.omit(df)
+
+  gga <- ggplot(df, aes(x = 1, y = Freq, fill = Var1)) +
+        geom_bar(stat = "identity", position = "fill") +
+        scale_y_continuous(labels = percent) +
+        scale_fill_manual(values = pcols) +
+   labs(x=NULL, y="Ratio", title=label4[[i]], fill=NULL) + 
+          theme_minimal() +
+          theme(
+          title=element_text(size =14, face = "bold"),
+            legend.key.height = unit(0.2, 'cm'),
+            legend.text=element_text(size =10),
+            axis.text.x=element_blank(), 
+            axis.text.y=element_text(size=10), 
+            axis.title=element_text(size=12),
+            panel.grid = element_blank()) 
+
+  ggb <- DimPlot(data, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.01)+
+        labs(x="UMAP-1", y="UMAP-2", title=label4[[i]], color=NULL) +
+        theme(
+          title=element_text(size =14, face = "bold"),
+            legend.key.height = unit(0.2, 'cm'),
+            legend.text=element_text(size =10),
+            axis.text.x=element_text(size=8), 
+            axis.text.y=element_text(size=8), 
+            axis.title=element_text(size=10))
+
+    Idents(data) <- factor(Idents(data), levels= my_levels) %>% fct_rev()
+
+  ggc <- DotPlot(data, features = markers.to.plot.sm, cols = c("midnightblue","deeppink3"), dot.scale = 5) +
+                 RotatedAxis() +
+                 labs(x=NULL, y=NULL, title=label4[[i]]) + 
+                 theme(
+                       title=element_text(size =14, face = "bold"),
+                       legend.key.height = unit(0.2, 'cm'),
+                       legend.title = element_text(size=8),
+                       legend.text=element_text(size =8),
+                       axis.text.x=element_text(size=9), 
+                       axis.text.y=element_text(size=9), 
+                       axis.title=element_blank()) 
+    
+  ggd[[i]] <-  plot_grid(gga, ggb, ggc, align = "v", ncol =4, rel_widths = c(.15, .2, .4, .01),
+  labels = label5[[i]], label_x = .0, label_y = 1.05, label_size = 16)
+  }
+
+dev.new(width=11, height=13)
+  plot_grid(NULL, ggd[[1]],ggd[[2]],ggd[[3]], ggd[[4]], ggd[[5]],ggd[[6]], align = "v", 
+  ncol =1, rel_heights = c(.01, .1, .1,.1, .1, .1, .1))
+  ggsave(file="MBSN_after_prediction.png")
+  dev.off()
+##############################################################################################################
+# SCPA
+library(SCPA)
+library(msigdbr)
+
+path <- NULL
+path$GOBP.pathways <- msigdbr("Homo sapiens", "C5", "BP") %>% format_pathways()
+path$Hallmark.pathways <- msigdbr("Homo sapiens", "H") %>% format_pathways()
+path$Biocarta.pathways <- msigdbr("Homo sapiens", "C2", "CP:BIOCARTA") %>% format_pathways()
+path$KEGG.pathways <- msigdbr("Homo sapiens", "C2", "CP:KEGG") %>% format_pathways()
+path$Reactome.pathways <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") %>% format_pathways()
+##################################################
+pathways <- c("GOBP.pathways", "Hallmark.pathways", "Biocarta.pathways", "KEGG.pathways","Reactome.pathways")
+MBSNs <- c("Smajic","Agarwal","Wang","Martirosyan","Lee")
+
+pred_levels <- c("Neuron","mNeu","ExNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","T","Peric","Endo")
+pred_levels <- factor(pred_levels, levels=(pred_levels))
+
+list <- result
+
+result.full <- NULL
+##################################################
+#Smajic
+data <- list$Smajic
+IDs <- c("Neuron","mNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo")
+result2 <- NULL
+for (i in IDs) {
+    for (j in pathways) {
+    ctrl <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "CTRL")
+
+    pd <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "PD")
+    rest_act <- compare_pathways(samples = list (ctrl, pd), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result2[[i]][[j]] <- rest_act
+  }}
+
+  result.full$Smajic <- result2
+  saveRDS(result.full, file = "temp1.rds")
+##################################################
+#Agarwal
+data <- list$Agarwal
+IDs <- c("Neuron","mNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo")
+result2 <- NULL
+for (i in IDs) {
+    for (j in pathways) {
+    ctrl <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "CTRL")
+
+    pd <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "PD")
+    rest_act <- compare_pathways(samples = list (ctrl, pd), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result2[[i]][[j]] <- rest_act
+  }}
+
+  result.full$Agarwal <- result2
+  saveRDS(result.full, file = "temp2.rds")
+##################################################
+#Wang
+data <- list$Wang
+IDs <-  c("Neuron","mNeu","ExNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo")
+result2 <- NULL
+for (i in IDs) {
+    for (j in pathways) {
+    ctrl <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "CTRL")
+
+    pd <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "PD")
+    rest_act <- compare_pathways(samples = list (ctrl, pd), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result2[[i]][[j]] <- rest_act
+  }}
+
+  result.full$Wang <- result2
+  saveRDS(result.full, file = "temp3.rds")
+##################################################
+#Martirosyan
+data <- list$Martirosyan
+IDs <-  c("Neuron","mNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo")
+result2 <- NULL
+for (i in IDs) {
+    for (j in pathways) {
+    ctrl <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "CTRL")
+
+    pd <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "PD")
+    rest_act <- compare_pathways(samples = list (ctrl, pd), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result2[[i]][[j]] <- rest_act
+  }}
+
+  result.full$Martirosyan <- result2
+  saveRDS(result.full, file = "temp4.rds")
+##################################################
+#Lee
+data <- list$Lee
+IDs <-  c("Neuron","mNeu","ExNeu","InhNeu","DANeu","Astro","Oligo","OPC","Mgl","Peric","Endo")
+result2 <- NULL
+for (i in IDs) {
+    for (j in pathways) {
+    ctrl <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "CTRL")
+
+    pd <- seurat_extract(data,
+                          meta1 = "Kamath", value_meta1 = i,
+                          meta2 = "Dx", value_meta2 = "PD")
+    rest_act <- compare_pathways(samples = list (ctrl, pd), 
+                                 pathways = path[[j]],
+                                 parallel = TRUE, cores = 28)
+  result2[[i]][[j]] <- rest_act
+  }}
+
+  result.full$Lee <- result2
+  saveRDS(result.full, file = "SCPA_full_SNMB.rds")
+####################################################################################################
