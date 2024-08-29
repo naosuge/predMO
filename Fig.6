@@ -1,0 +1,265 @@
+########################################################################
+# bulk RNA-seq
+# curation: nur single in GSE148434
+########################################################################
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt update
+sudo apt upgrade
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+library(tximport)
+library(edgeR)
+library(tidyverse)
+library(biomaRt)
+library(cowplot)
+library(ggrepel)
+library(viridis)
+library(reshape2)
+library(fgsea)
+library(pheatmap)
+########################################################################
+#collect the counts
+########################################################################
+setwd("/home/naoto/Data/RSEM/hs_brain/")
+getwd()
+
+ds <- read.table("SN_datasheet.csv", header = TRUE, sep = ",")
+ds %>% head
+    Dx         Run     Study Case ID Braak
+1 CTRL SRR21064197 GSE148434              
+2 CTRL SRR21064198 GSE148434              
+3 CTRL SRR21064203 GSE148434              
+4 CTRL SRR21064204 GSE148434              
+5 CTRL SRR21064205 GSE148434              
+6 CTRL SRR21064206 GSE148434    
+
+Study <- c("GSE148434", "GSE114918", "GSE206308", "GSE182622")
+
+count <- NULL
+for (i in Study) {
+list <- ds %>% filter(Study == paste(i))
+files <- file.path(".", paste0(list$Run, ".genes.results"))
+names(files) <- paste0("sample", 1:1:nrow(list))
+txi.rsem <- tximport(files, type = "rsem", txIn = FALSE, txOut = FALSE)
+count[[i]] <- txi.rsem$counts
+count[[i]] <- count[[i]] %>% data.frame()
+}
+
+temp <- t(count$GSE182622)
+temp <- data.frame(temp, case = list$Case)
+temp[1:5,c(1:3,ncol(temp))]
+temp$case <- factor(temp$case, levels = unique(temp$case))
+
+tmp0 <- temp %>% group_by(case) %>% summarise(across(1:ncol(temp)-1, sum))
+tmp0 <- tmp0 %>% column_to_rownames("case")
+tmp0 <- t(tmp0) %>% data.frame()
+count$GSE182622 <- tmp0
+
+# omit the genes with low count (10tal countas >10)
+for (i in Study) {
+count[[i]] <- count[[i]][rowSums(count[[i]]) > 10,]
+print(count[[i]][1:3, 1:5])
+}
+                sample1 sample2 sample3 sample4 sample5
+ENSG00000000003   63.00    5.00  619.00  479.00   13.00
+ENSG00000000419  206.00  113.76 3356.99 2510.00  135.00
+ENSG00000000457  137.57   45.34 1369.67  618.02   96.33
+                sample1 sample2 sample3 sample4 sample5
+ENSG00000000003      10       6      12       1       7
+ENSG00000000005       1       0       0       0       0
+ENSG00000000419       9      18       7      26      29
+                sample1 sample2 sample3 sample4 sample5
+ENSG00000000003     522     600     295     359     354
+ENSG00000000005       2       6       2       2      13
+ENSG00000000419     324     377     337     356     309
+                 C1  C2  C3  C4  C5
+ENSG00000000003 247 200 343 130 162
+ENSG00000000005   2  13  17  36   0
+ENSG00000000419 286 356 176 336 502
+
+#saveRDS(count, file = "count_four_GSE.rds")
+########################################################################
+#shape the data
+########################################################################
+# liklihood estimation
+# count <- readRDS("count_four_GSE.rds")
+
+list2 <- ds %>% filter(Study %in% c("GSE148434", "GSE114918", "GSE206308"))
+list2 <- list2[,1:3]
+temp2 <- data.frame(Run = colnames(tmp0), Study = rep("GSE182622", ncol(tmp0)))
+temp2$Dx <- ifelse(grepl(pattern="C", temp2$Run), "CTRL", ifelse(grepl(pattern="PDE", temp2$Run), "PD_early", ifelse(grepl(pattern="PDL", temp2$Run), "PD_late", "ILBD")))
+list2 <- rbind(list2, temp2)
+
+
+result <- NULL
+for (i in c("GSE148434", "GSE114918", "GSE206308")) {
+list3 <- list2 %>% filter(Study == paste(i))
+group <- list3$Dx
+group <- factor(group, levels = c("CTRL", "PD"))
+
+y <- DGEList(counts = count[[i]], group = group)
+
+keep <- filterByExpr(y)
+
+y <- y[keep, , keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+
+y <- estimateCommonDisp(y) 
+y <- estimateTagwiseDisp(y)
+result[[i]] <- exactTest(y)
+result[[i]]  <- as.data.frame(topTags(result[[i]], n = nrow(result[[i]])))
+}
+
+for (i in c("PD_early", "PD_late", "ILBD")) {
+list.s <- list %>% filter(Dx %in% c("CTRL", i))
+group <- list.s$Dx
+group <- factor(group, levels = c("CTRL", i))
+y <- DGEList(counts = count[["GSE182622"]][, list.s$Case], group = group)
+keep <- filterByExpr(y)
+
+y <- y[keep, , keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+
+y <- estimateCommonDisp(y) 
+y <- estimateTagwiseDisp(y)
+result[[i]] <- exactTest(y)
+result[[i]]  <- as.data.frame(topTags(result[[i]], n = nrow(result[[i]])))
+}
+########################################################################
+# Entrez ID
+
+db <- useMart("ensembl")
+hd <- useDataset("hsapiens_gene_ensembl", mart = db)
+
+Study2 <- c("GSE148434", "GSE114918", "GSE206308", "PD_early", "PD_late", "ILBD")
+
+for (i in Study2) {
+result[[i]] <- result[[i]] %>% rownames_to_column("ensembl_gene_id")
+alt <- getBM(attributes = c("hgnc_symbol", "entrezgene_id", "ensembl_gene_id"), 
+         filters = "ensembl_gene_id", values = result[[i]]$ensembl_gene_id, 
+         mart = hd, useCache = FALSE)
+result[[i]] <- left_join(alt, result[[i]], by = "ensembl_gene_id")
+}
+
+########################################################################
+dd <- NULL
+fgseaRes <- NULL
+for (i in Study2) {
+  temp <- result[[i]]
+  temp <- subset(temp, !(is.na(temp$entrezgene_id)))
+  temp <- temp %>% distinct(entrezgene_id, .keep_all = TRUE)
+  dd[[i]] <- temp$logFC
+  names(dd[[i]]) <- temp$entrezgene_id
+  dd[[i]] <- sort(dd[[i]], decreasing=F)
+  pathways <- reactomePathways(names(dd[[i]])) #ここが重要
+  fgseaRes[[i]] <- fgsea(pathways, dd[[i]], maxSize=500)
+}
+
+head(fgseaRes)
+#saveRDS(fgseaRes, file = "pathway_four_GSE.rds")
+
+for (i in Study2) {
+tmp <- fgseaRes[[i]]
+topPathwaysUp <- tmp[ES > 0][head(order(pval), n=10), pathway]
+topPathwaysDown <- tmp[ES < 0][head(order(pval), n=10), pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+  pathways <- reactomePathways(names(dd[[i]])) #ここが重要
+plotGseaTable(pathways[topPathways], dd[[i]], tmp, 
+              gseaParam=0.5)
+ fname <- paste0("GSEA_", i, ".png")
+ ggsave(file = fname)
+}
+########################################################################
+
+frame2 <- data.frame(pathway = fgseaRes[[1]]$pathway)
+
+  for (i in Study2) {
+    frame1 <- fgseaRes[[i]]
+    frame1 <- frame1[,c("pathway","NES")]
+    frame1 <- frame1 %>% rename(!!i := NES)
+    frame2 <- left_join(frame2, frame1, by = "pathway")
+    }
+frame2 %>% head
+                                                          pathway GSE148434
+1                                          2-LTR circle formation  1.374465
+2                      5-Phosphoribose 1-diphosphate biosynthesis -1.133590
+3 A tetrasaccharide linker sequence is required for GAG synthesis -1.032548
+4                                       ABC transporter disorders  1.560630
+5                           ABC transporters in lipid homeostasis -1.247307
+6                          ABC-family proteins mediated transport  1.134770
+   GSE114918  GSE206308   PD_early    PD_late       ILBD
+1 -0.7673995 -0.7902382  0.7601156  1.0112177  1.0415157
+2  0.7136441 -1.1784638 -0.5758921  1.0841973  1.2843192
+3 -1.0854217  0.9625653 -0.8113744 -0.8403184 -0.8479087
+4 -0.8754368 -0.9562920  0.8327157 -0.5352935  1.6484148
+5 -1.0949582  0.4953303 -0.8400150 -1.2932447 -0.6956321
+6 -1.0395663 -0.8590708 -0.6866436 -0.7896552  1.2807607
+
+############################################################################
+#Reactome
+# df[grep("DOPAMINE", df$pathway), ] 
+
+intpath <- c(
+  "Neurotransmitter release cycle",
+  "L1CAM interactions",
+  "COPI-dependent Golgi-to-ER retrograde traffic",
+ "GPCR ligand binding"
+)
+
+df <- frame2
+df <- df %>% filter(pathway %in% intpath)
+df <- melt(df)
+
+df$pathway <- factor(df$pathway, levels =intpath) %>% fct_rev
+
+#df$hgnc_symbol <- factor(df$hgnc_symbol, levels = DAmarker) %>% fct_rev
+
+dev.new(width=8, height=3)
+ggplot(df, aes(variable, pathway, fill = -value)) +
+              geom_tile() +
+              labs(x="GSE182622", y=NULL, title="Substantia nigra", fill="-NES") +       
+              theme_bw() +
+        scale_fill_gradient2(low = "turquoise4", mid = "gray88", high = "orangered1") +
+              theme(#legend.position = "none",
+              title=element_text(size =15),
+                legend.text=element_text(size =15), 
+                axis.text.x=element_text(size=15, angle = 45, hjust = 1), 
+                axis.text.y=element_text(size =15), 
+                axis.title=element_text(size=12),
+                axis.title.x=element_text(size=15, hjust = 0.8, vjust = 5)) 
+ggsave(file = "heat_LCM.png")
+dev.off()
+########################################################################
+intpath <- intpath %>% as.character()
+ggg <- NULL
+
+for (i in Study2) {
+tmp <- fgseaRes[[i]]
+pathways <- reactomePathways(names(dd[[i]]))
+ggg[[i]] <- plotGseaTable(pathways[intpath], dd[[i]], tmp, 
+              gseaParam=0.5)
+}
+dev.new(width=18, height=8)
+ plot_grid(ggg[[1]],ggg[[2]],ggg[[3]], ggg[[4]],ggg[[5]],ggg[[6]], 
+ align = "v", ncol =2, rel_widths = c(1, 1),
+ labels = Study2, label_x= .0, label_y = 1, label_size = 15)
+ ggsave(file="Reactome_selected.png")
+ dev.off()
+########################################################################
+library(magick)
+
+img1 <- image_read("heat_LCM.png") %>% image_resize(geometry = "1200x")
+img2 <- image_read("Reactome_selected.png") %>% image_resize(geometry = "1500x")
+
+img1 <- image_annotate(img1, text = "A", location = "+0+0", size = 50, color = "black")
+img2 <- image_annotate(img2, text = "B", location = "+0+0", size = 50, color = "black")
+
+img <- image_append(c(img1, img2), stack = T)
+image_write(img, "bulk.png", format = "png")
