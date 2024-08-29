@@ -282,3 +282,75 @@ dev.new(width=10, height=10)
  ggsave(file="predicted_ratio.png")
  dev.off()
 #############################################################################################################
+# Fig. S5
+# prediction後のDANeuに着目した検討
+
+result <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/predicted_hMLO_LM_Kam.rds")
+  result[["Zagare"]]$Dx <- factor(result[["Zagare"]]$Dx, levels = c("WT", "G2019S"))
+
+label6 <- NULL
+  label6$simple.LM <- c(NA, "A", "C", "G", "J")
+  label6$orig.ID <- c(NA, "B", "D", "H", "K")
+  label6$pred.Kam <-  c(NA, "C", "E", "I", "L")
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","Prog","Peric","Endo","T","Unk")
+my_levels <- factor(my_levels, levels=(my_levels))
+
+#DAmarker <- c("TH", "DDC", "SLC18A2", "SLC6A3", "DRD2", "GFRA1", "NR4A2", "PITX3", "SOX6", "EN1", "EN2", "FOXA1", "FOXA2", "LMX1A", "LMX1B")
+DAmarker <- c("TH", "DDC", "SLC18A2", "SLC6A3", "DRD2", "ALDH1A1", "GFRA1", "NR4A2", "PITX3", "EN1", "EN2", "FOXA1", "FOXA2", "LMX1A", "LMX1B")
+DAmarker <- factor(DAmarker, levels = DAmarker)
+
+pred <- c("simple.LM", "orig.ID", "pred.Kam")
+
+ggg <- NULL
+
+for (j in pred) {
+  gg <-NULL
+  for (i in MLO) {
+    int <- result[[i]]
+    Idents(int) <- j
+    Idents(int) <- factor(Idents(int), levels= my_levels) %>% fct_rev()
+    gg[[i]] <- DotPlot(int, features = DAmarker, cols = c("midnightblue","deeppink3"), dot.scale = 6,
+      scale.max =50) +
+      RotatedAxis()+
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size=10), 
+            legend.title = element_text(size=12),
+            legend.text = element_text(size=8),
+            legend.key.height = unit(0.2, 'cm'))
+  }
+  ggg[[j]] <- plot_grid(
+    NULL, gg[[1]], gg[[2]], gg[[3]], gg[[4]], 
+    ncol = 1,
+    rel_heights = c(.01, .1, .1, .1, .1),
+    labels = label6[[j]],
+    label_x = .0, label_y = 1.0, label_size = 16)
+}
+
+LP1 <- ggdraw() + draw_label("MO-PARK4-1",
+      fontface = 'bold', hjust = 0.3, vjust = 1.5, size = 14, angle = 90) 
+LP2 <- ggdraw() + draw_label("MO-PARK4-2",
+      fontface = 'bold', hjust = 0.3, vjust = 1.5, size = 14, angle = 90) 
+LP3 <- ggdraw() + draw_label("MO-PARK8-1",
+      fontface = 'bold', hjust = 0.3, vjust = 1.5, size = 14, angle = 90) 
+LP4 <- ggdraw() + draw_label("MO-PARK8-2",
+      fontface = 'bold', hjust = 0.3, vjust = 1.5, size = 14, angle = 90) 
+
+xlabel <- plot_grid(
+   NULL, LP1, LP2, LP3, LP4,
+   ncol = 1,
+   rel_heights = c(.01, .1, .1, .1, .1))
+
+
+dev.new(width=15, height=11)
+  plot_grid(
+     xlabel, ggg[[1]], ggg[[2]], ggg[[3]], 
+     labels = c(NA, "Fetal midbrain ID", "     Original ID", "Aged midbrain ID"),
+     hjust = -0.6, vjust = 1.1, label_size = 14,
+     ncol = 4,
+     rel_widths = c(.01, .1, .1, .1))
+ggsave(file="after_prediction2.png", bg = "white")
+dev.off()
+#############################################################################################################
