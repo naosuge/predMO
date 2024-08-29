@@ -1,0 +1,386 @@
+# hMLO, Fiorenzano et al.
+# GSE168323
+
+
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt-get update
+sudo apt-get upgrade
+
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+#collect the TPM
+
+setwd("/home/naoto/Data/scRNA/Fiorenzano/")
+getwd()
+
+library(Seurat)
+library(harmony)
+library(SCPA)
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(cowplot)
+
+f15d_a <- read.table(file ="GSM5136255_1standardorgday15.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f15d_b <- read.table(file ="GSM5136256_2standardorgday15.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f30d_a <- read.table(file ="GSM5136257_5standardorgday30.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f30d_b <- read.table(file ="GSM5136261_1standardorgday30.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f30d_c <- read.table(file ="GSM5136263_4standardorgday30.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f30d_d <- read.table(file ="GSM5136265_3standardorgday30.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f30d_e <- read.table(file ="GSM5136266_2standardorgday30.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f60d_a <- read.table(file ="GSM5136258_14standardorgday60.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f60d_b <- read.table(file ="GSM5136259_16standardorgday60.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f60d_c <- read.table(file ="GSM5136260_15standardorgday60.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f60d_d <- read.table(file ="GSM5136262_13standardorgday60.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f60d_e <- read.table(file ="GSM5136264_12standardorgday60.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f90d_a <- read.table(file ="GSM5136273_1standardorgday90.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f90d_b <- read.table(file ="GSM5136274_2standardorgday90.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f120d_a <- read.table(file ="GSM5136267_1standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f120d_b <- read.table(file ="GSM5136268_2standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f120d_c <- read.table(file ="GSM5136269_3standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f120d_d <- read.table(file ="GSM5136270_4standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+f120d_e <- read.table(file ="GSM5136271_5standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+f120d_f <- read.table(file ="GSM5136272_6standardorgday120.csv", sep = ",", header = TRUE, row.names = 1, stringsAsFactors = FALSE) #Mostly dead cells
+
+# 17.7GB memory used
+
+f15d_a <- CreateSeuratObject(counts = f15d_a, project = "f15d_a", min.cells = 3, min.features = 200)
+f15d_b <- CreateSeuratObject(counts = f15d_b, project = "f15d_b", min.cells = 3, min.features = 200)
+f30d_a <- CreateSeuratObject(counts = f30d_a, project = "f30d_a", min.cells = 3, min.features = 200)
+f30d_b <- CreateSeuratObject(counts = f30d_b, project = "f30d_b", min.cells = 3, min.features = 200)
+f30d_c <- CreateSeuratObject(counts = f30d_c, project = "f30d_c", min.cells = 3, min.features = 200)
+f30d_d <- CreateSeuratObject(counts = f30d_d, project = "f30d_d", min.cells = 3, min.features = 200)
+f30d_e <- CreateSeuratObject(counts = f30d_e, project = "f30d_e", min.cells = 3, min.features = 200)
+f60d_a <- CreateSeuratObject(counts = f60d_a, project = "f60d_a", min.cells = 3, min.features = 200)
+f60d_b <- CreateSeuratObject(counts = f60d_b, project = "f60d_b", min.cells = 3, min.features = 200)
+f60d_c <- CreateSeuratObject(counts = f60d_c, project = "f60d_c", min.cells = 3, min.features = 200)
+f60d_d <- CreateSeuratObject(counts = f60d_d, project = "f60d_d", min.cells = 3, min.features = 200)
+f60d_e <- CreateSeuratObject(counts = f60d_e, project = "f60d_e", min.cells = 3, min.features = 200)
+f90d_a <- CreateSeuratObject(counts = f90d_a, project = "f90d_a", min.cells = 3, min.features = 200)
+f90d_b <- CreateSeuratObject(counts = f90d_b, project = "f90d_b", min.cells = 3, min.features = 200)
+f120d_a <- CreateSeuratObject(counts = f120d_a, project = "f120d_a", min.cells = 3, min.features = 200)
+f120d_b <- CreateSeuratObject(counts = f120d_b, project = "f120d_b", min.cells = 3, min.features = 200)
+f120d_c <- CreateSeuratObject(counts = f120d_c, project = "f120d_c", min.cells = 3, min.features = 200)
+f120d_d <- CreateSeuratObject(counts = f120d_d, project = "f120d_d", min.cells = 3, min.features = 200)
+f120d_e <- CreateSeuratObject(counts = f120d_e, project = "f120d_e", min.cells = 3, min.features = 200)
+f120d_f <- CreateSeuratObject(counts = f120d_f, project = "f120d_f", min.cells = 3, min.features = 200)
+
+f15d <- merge(f15d_a, y = f15d_b, add.cell.ids = c("a", "b"), project = "fior_15d")
+f30d <- merge(f30d_a, y = c(f30d_b,f30d_c,f30d_d,f30d_e), add.cell.ids = c("a", "b","c","d","e"), project = "fior_30d")
+f60d <- merge(f60d_a, y = c(f60d_b,f60d_c,f60d_d,f60d_e), add.cell.ids = c("a", "b","c","d","e"), project = "fior_60d")
+f90d <- merge(f90d_a, y = f90d_b, add.cell.ids = c("a", "b"), project = "fior_90d")
+f120d <- merge(f120d_a, y = c(f120d_b,f120d_c,f120d_d,f120d_e,f120d_f), add.cell.ids = c("a", "b","c","d","e","f"), project = "fior_120d")
+
+f15d[["days"]] <- "15d"
+f30d[["days"]] <- "30d"
+f60d[["days"]] <- "60d"
+f90d[["days"]] <- "90d"
+f120d[["days"]] <- "120d"
+
+
+
+list <- merge(f15d, y = c(f30d, f60d, f90d, f120d), add.cell.ids = c("15d", "30d", "60d", "90d", "120d"), project = "fior_hMLO")
+list <- JoinLayers(object = list)
+list
+24807 features across 91034 samples within 1 assay 
+Active assay: RNA (24807 features, 0 variable features)
+
+#前回。あれ違う?
+#32972 features across 40948 samples within 1 assay 
+#Active assay: RNA (32972 features, 0 variable features)
+
+list <- SplitObject(list, split.by = "orig.ident")
+for (i in 1:length(list)) {
+list[[i]] <- NormalizeData(list[[i]], normalization.method = "LogNormalize", scale.factor = 10000)
+list[[i]] <- FindVariableFeatures(list[[i]], selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(list[[i]])
+list[[i]] <- ScaleData(list[[i]], features = all.genes)
+list[[i]] <- RunPCA(list[[i]], features = VariableFeatures(object = list[[i]]))
+list[[i]] <- RunUMAP(list[[i]], dims = 1:20, reduction = "pca", seed.use = 42)
+}
+saveRDS(list, file = "fior_V5_sep.rds")
+######################################################################################################
+
+library(DoubletFinder)
+
+for (i in 1:length(list)) {
+  print(i)
+  sweep.res.list_list <- paramSweep(list[[i]], PCs = 1:20, sct = FALSE)
+  sweep.stats_list <- summarizeSweep(sweep.res.list_list, GT = FALSE)
+  bcmvn_list <- find.pK(sweep.stats_list)
+
+  ggplot(bcmvn_list, aes(pK, BCmetric, group = 1)) +
+    geom_point() +
+    geom_line()
+
+  pK <- bcmvn_list %>% 
+    filter(BCmetric == max(BCmetric)) %>%
+    select(pK) 
+  pK <- as.numeric(as.character(pK[[1]]))
+  pK
+
+  annotations <- list[[i]]@meta.data$seurat_clusters
+  homotypic.prop <- modelHomotypic(annotations)
+  nExp_poi <- round(0.075*nrow(list[[i]]@meta.data))
+  nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+  nExp_poi.adj
+
+  list[[i]] <- doubletFinder(list[[i]], 
+                                     PCs = 1:20, 
+                                     pN = 0.25, 
+                                     pK = pK, 
+                                     nExp = nExp_poi.adj,
+                                     reuse.pANN = FALSE, sct = FALSE)
+  }
+
+#list[[i]]@meta.data %>% head
+list.single <- NULL
+
+for (i in 1:length(list)) {
+  DFC <- colnames(list[[i]]@meta.data)[6]
+
+  # Doubletを取り除く
+  Idents(list[[i]]) <- DFC
+  list.single[[i]] <- subset(list[[i]], idents = "Singlet")
+  list.single[[i]]
+  }
+saveRDS(list.single, file = "fior_V5_sep_single.rds")
+############################################################################
+
+#list <- readRDS("fior_V5_sep_single.rds")
+f15d <- merge(list.single[[1]], y = c(list.single[[2]]), add.cell.ids = c("a", "b"), project = "fior_15d")
+f30d <- merge(list.single[[3]], y = c(list.single[[4]], list.single[[5]], list.single[[6]], list.single[[7]]), add.cell.ids = c("a", "b","c","d","e"), project = "fior_30d")
+f60d <- merge(list.single[[8]], y = c(list.single[[9]], list.single[[10]], list.single[[11]], list.single[[12]]), add.cell.ids = c("a", "b","c","d","e"), project = "fior_60d")
+f90d <- merge(list.single[[13]], y = c(list.single[[14]]), add.cell.ids = c("a", "b"), project = "fior_90d")
+f120d <- merge(list.single[[15]], y = c(list.single[[16]], list.single[[17]], list.single[[18]], list.single[[19]], list.single[[20]]), add.cell.ids = c("a", "b","c","d","e","f"), project = "fior_120d")
+
+f15d <- JoinLayers(object = f15d)
+f30d <- JoinLayers(object = f30d)
+f60d <- JoinLayers(object = f60d)
+f90d <- JoinLayers(object = f90d)
+f120d <- JoinLayers(object = f120d)
+
+f15d[["days"]] <- "15d"
+f30d[["days"]] <- "30d"
+f60d[["days"]] <- "60d"
+f90d[["days"]] <- "90d"
+f120d[["days"]] <- "120d"
+
+list <- merge(f15d, y = c(f30d, f60d, f90d, f120d), add.cell.ids = c("15d", "30d", "60d", "90d", "120d"), project = "fior_hMLO")
+list <- JoinLayers(object = list)
+list
+
+#24807 features across 84205 samples within 1 assay 
+#Active assay: RNA (24807 features, 2000 variable features)
+# 3 layers present: scale.data, data, counts
+
+list[["percent.mt"]] <- PercentageFeatureSet(list, pattern = "^MT-")
+list[["percent.rb"]] <- PercentageFeatureSet(list, pattern = "^RP[SL][[:digit:]]|^RP[[:digit:]]|^RPSA")
+list <- subset(list, subset = nFeature_RNA > 100 & nFeature_RNA < 10000 & percent.mt < 20 & percent.rb < 50)
+#mtは最初から20%で切ってある。rbを10%にすると15dの細胞がなくなるのでやむをえず50%
+VlnPlot(list, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.rb"), ncol = 4)
+list <- NormalizeData(list, normalization.method = "LogNormalize", scale.factor = 10000)
+list <- FindVariableFeatures(list, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(list)
+list <- ScaleData(list, features = all.genes)
+list <- RunPCA(list, features = VariableFeatures(object = list))
+list <- RunHarmony(list, "orig.ident", lambda = .1, verbose = FALSE, max.iter.harmony = 100, max.iter.cluster = 100, project.dim = F)
+list <- RunUMAP(list, dims = 1:20, reduction = "harmony", seed.use = 42)
+
+saveRDS(list, file = "fior_V5_sep_single_harmony.rds")
+###############################################################
+#list <- readRDS("fior_V5_sep_single_harmony.rds")
+
+list@meta.data$days <- factor(list@meta.data$days, levels =c("15d","30d","60d","90d","120d"))
+
+list <- FindNeighbors(list, dims = 1:20)
+list <- FindClusters(list, resolution = 0.1)
+
+Maximum modularity in 10 random starts: 0.9752
+Number of communities: 12
+
+###############################################################
+int.markers <- FindAllMarkers(int, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+markers <- int.markers %>% group_by(cluster) %>% slice_max(n = 3, order_by = avg_log2FC)
+markers %>% print(n = 40)
+###############################################################
+markers.to.plot.f <- c("SNAP25","MAPT","PRKACB","DCC","TH","SLC17A6","VSX2","SPARCL1","AQP4","CDHR3","RGS2","HES5","DPPA4","TOP2A","MKI67","TYRP1" ,"DCT","IGFBP3","VCAN","COL1A2","GFRA3","ARHGAP15")
+
+int <- list
+new.cluster.ids <- c("RGa","RGo","Prog","DANeu","RGa","Endo","Neu","Prog","RGa","OPC","Peric","Peric")
+names(new.cluster.ids) <- levels(int)
+int <- RenameIdents(int, new.cluster.ids)
+
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+my_levels <- factor(my_levels, levels=(my_levels))
+
+Idents(int) <- factor(Idents(int), levels= my_levels) %>% fct_rev()
+
+dev.new(width=9, height=4)
+DotPlot(int, features = markers.to.plot.f, cols = c("midnightblue","deeppink3"), dot.scale = 8) +
+    RotatedAxis()
+dev.off()
+
+Idents(int) <- factor(Idents(int), levels= my_levels)
+int$orig.ID <- Idents(int)
+#saveRDS(int, file = "fior_V5_sep_single_harmony_annotated.rds")
+prop_cluster <- prop.table(x=table(int@meta.data$days, int@active.ident), margin =2)
+df <- data.frame(prop_cluster)
+############################################################################################
+# predicted by La Manno dataset
+
+int <- readRDS("fior_V5_sep_single_harmony_annotated.rds")
+
+prop_cluster <- prop.table(x=table(int@meta.data$days, int@active.ident), margin =2)
+df <- data.frame(prop_cluster)
+
+# prediction
+LMBD <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/LMBD_UMAP_simple_annotation.rds")
+
+pred_levels <- c("0", "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15",
+"Neu","Neuron","mNeu","ExNeu","InhNeu","SERT","OMTN","RN","GABA","DAN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+pred_levels <- factor(pred_levels, levels=(pred_levels))
+
+    query <- int
+    query$uns.id <- query@active.ident
+    sup <- LMBD
+    anchors <- FindTransferAnchors(reference = sup, query = query, dims = 1:30, reference.reduction = "pca")
+    predictions <- TransferData(anchorset = anchors, refdata = sup@active.ident, dims = 1:30)
+    query <- AddMetaData(query, metadata = predictions$predicted.id, col.name = "predicted.id")
+    query$predicted.id<- factor(query$predicted.id, levels= pred_levels)
+    query@active.ident <- query$predicted.id
+
+prop_cluster2 <- prop.table(x=table(query@meta.data$days, query@active.ident), margin =2)
+df2 <- data.frame(prop_cluster2)
+df2 <- df2 %>% na.omit()
+
+# for figure
+Idents(int) <- factor(Idents(int), levels= my_levels) %>% fct_rev()
+gg1<- DotPlot(int, features = markers.to.plot.f, cols = c("midnightblue","deeppink3"), dot.scale = 8) +
+    RotatedAxis() +
+    theme(legend.key.height = unit(0.3, 'cm')) +
+    labs(x=NULL, y="Cell type", title=NULL, fill=NULL)
+
+Idents(int) <- factor(Idents(int), levels= my_levels)
+
+col.c <- c(
+"Neu"="pink1",
+"Neuron"="pink1",
+"mNeu"="orchid2",
+"ExNeu"="pink3",
+"InhNeu"="sienna1",
+"GABA"="sienna1",
+"SERT"="pink1",
+"OMTN"="pink2",
+"RN"="pink3",
+"DANeu"="deeppink",
+"NB"="cyan3",
+"imNeu"="cyan3",
+"RG"="steelblue3",
+"RG1"="steelblue1",
+"RG2"="steelblue3",
+"RGa"="steelblue1",
+"RGo"="steelblue3",
+"Astro"="steelblue1",
+"Oligo"="turquoise4",
+"OPC"="turquoise3",
+"Mgl"="orchid4",
+"T"="khaki3",
+"Prog"="olivedrab3",
+"Peric"="sienna4",
+"Endo"="thistle3",
+"Unk"="ivory3"
+)
+
+gg2a <- DimPlot(int, reduction = "umap", cols = col.c, label = FALSE, pt.size = 0.01, raster=FALSE) +
+          theme(legend.key.height = unit(0.3, 'cm'))
+
+col.c2 <-c(
+  "Neu"="grey",
+"Neuron"="grey",
+"mNeu"="grey",
+"ExNeu"="grey",
+"InhNeu"="grey",
+"GABA"="grey",
+"SERT"="grey",
+"OMTN"="grey",
+"RN"="grey",
+"DANeu"="deeppink",
+"NB"="grey",
+"imNeu"="grey",
+"RG"="grey",
+"RG1"="grey",
+"RG2"="grey",
+"RGa"="grey",
+"RGo"="grey",
+"Astro"="grey",
+"Oligo"="grey",
+"OPC"="grey",
+"Mgl"="grey",
+"T"="grey",
+"Prog"="grey",
+"Peric"="grey",
+"Endo"="grey",
+"Unk"="grey"
+    )
+
+gg2b <- ggplot(df, aes(x = Var1, y = Freq, fill = Var2)) +
+        geom_bar(stat = "identity", position = "fill") +
+        scale_y_continuous(labels = percent) +
+        scale_fill_manual(values = col.c) +
+   labs(x=NULL, y="Ratio", title=NULL, fill=NULL) +       
+          theme_bw() +
+          theme(
+          title=element_text(size =10),
+            legend.key.height = unit(0.3, 'cm'),
+            legend.text=element_text(size =10),
+            axis.text.x=element_text(size=12), 
+            axis.text.y=element_text(size=10), 
+            axis.title=element_text(size=15)) 
+
+gg3 <- DimPlot(int, split.by = "days", reduction = "umap", cols = col.c2, label = FALSE, pt.size = 0.1, raster=FALSE) +
+          theme(legend.key.height = unit(0.3, 'cm'))
+
+gg4a <- DimPlot(query, reduction = "umap", cols = col.c, label = FALSE, pt.size = 0.01, raster=FALSE)
+
+gg4b <- ggplot(df2, aes(x = Var1, y = Freq, fill = Var2)) +
+        geom_bar(stat = "identity", position = "fill") +
+        scale_y_continuous(labels = percent) +
+        scale_fill_manual(values = col.c) +
+   labs(x=NULL, y="Ratio", title=NULL, fill=NULL) +       
+          theme_bw() +
+          theme(
+          title=element_text(size =10),
+            legend.key.height = unit(0.3, 'cm'),
+            legend.text=element_text(size =10), 
+            axis.text.x=element_text(size=12), 
+            axis.text.y=element_text(size=10), 
+            axis.title=element_text(size=15)) 
+
+gg5 <- DimPlot(query, split.by = "days", reduction = "umap", cols = col.c2, label = FALSE, pt.size = 0.1, raster=FALSE)
+
+upper.panel <- plot_grid(gg1, NULL, align = "hv", rel_widths = c(.1, .01), ncol = 2)
+middle.panel <- plot_grid(gg2a, NULL, gg2b, NULL, align = "h", rel_widths = c(.4, .1, .4, .1), ncol = 4,
+ labels = c("B", NA, "C", NA), label_x = .02, label_y = 1.0, label_size = 16)
+middle2.panel <- plot_grid(gg3, NULL, align = "hv", rel_widths = c(.7, .3), ncol = 2)
+lower.panel <- plot_grid(gg4a, NULL,  gg4b, NULL, align = "h", rel_widths = c(.4, .1, .4, .1), ncol = 4,
+ labels = c("E", NA, "F", NA), label_x = .02, label_y = 1.0, label_size = 16)
+lower2.panel <- plot_grid(gg5, NULL, align = "hv", rel_widths = c(.7, .3), ncol = 2)
+
+ dev.new(width=9, height=13)
+ plot_grid(
+   NULL, upper.panel, middle.panel, middle2.panel, NULL, lower.panel, lower2.panel,
+   ncol = 1,
+   rel_heights = c(.02, .1, .09, .07, .02, .09, .07),
+  labels = c("Original ID", "A", NA, "D", "Fetal brain ID",NA, "G"),
+ label_x = .02, label_y = 1.0, label_size = 16)
+
+ggsave(file="fior_figure2.png")
+dev.off()
