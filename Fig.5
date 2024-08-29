@@ -1,0 +1,493 @@
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt update
+sudo apt upgrade
+
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+setwd("/home/naoto/Data/scRNA/pred/")
+getwd()
+
+
+library(tidyverse)
+library(cowplot)
+library(reshape2)
+library(scales)
+library(pheatmap)
+library(viridis)
+
+# Reactome
+##################################################################################################
+result.SN <- readRDS("/home/naoto/Data/scRNA/pred/SCPA_full_SNMB.rds")
+
+Reactome <- NULL
+result.MO <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_orig.rds")
+  Reactome$orig$"SN_0" <- result.SN$Smajic$DANeu$Reactome.pathways
+  Reactome$orig$"SN_1" <- result.SN$Wang$DANeu$Reactome.pathways
+  Reactome$orig$"SN_2" <- result.SN$Martirosyan$DANeu$Reactome.pathways
+  Reactome$orig$"SN_3" <- result.SN$Lee$DANeu$Reactome.pathways
+  Reactome$orig$"SN_4" <- result.SN$Agarwal$DANeu$Reactome.pathways
+  Reactome$orig$"MO_PARK4-1" <- result.MO$Mohamed$DANeu$Reactome.pathways
+  Reactome$orig$"MO_PARK4-2" <- result.MO$Patik$DANeu$Reactome.pathways
+  Reactome$orig$"MO_PARK8-1" <- result.MO$Zagare$DANeu$Reactome.pathways
+  Reactome$orig$"MO_PARK8-2" <- result.MO$Walter$DANeu$Reactome.pathways
+
+result.MO <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_MLO_sLM.rds")
+  Reactome$fetal$"SN_0" <- result.SN$Smajic$DANeu$Reactome.pathways
+  Reactome$fetal$"SN_1" <- result.SN$Wang$DANeu$Reactome.pathways
+  Reactome$fetal$"SN_2" <- result.SN$Martirosyan$DANeu$Reactome.pathways
+  Reactome$fetal$"SN_3" <- result.SN$Lee$DANeu$Reactome.pathways
+  Reactome$fetal$"SN_4" <- result.SN$Agarwal$DANeu$Reactome.pathways
+  Reactome$fetal$"MO_PARK4-1" <- result.MO$Mohamed$DANeu$Reactome.pathways #NULL
+  Reactome$fetal$"MO_PARK4-2" <- result.MO$Patik$DANeu$Reactome.pathways
+  Reactome$fetal$"MO_PARK8-1" <- result.MO$Zagare$DANeu$Reactome.pathways
+  Reactome$fetal$"MO_PARK8-2" <- result.MO$Walter$DANeu$Reactome.pathways
+
+result.MO <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_full.rds")
+  Reactome$aged$"SN_0" <- result.SN$Smajic$DANeu$Reactome.pathways
+  Reactome$aged$"SN_1" <- result.SN$Wang$DANeu$Reactome.pathways
+  Reactome$aged$"SN_2" <- result.SN$Martirosyan$DANeu$Reactome.pathways
+  Reactome$aged$"SN_3" <- result.SN$Lee$DANeu$Reactome.pathways
+  Reactome$aged$"SN_4" <- result.SN$Agarwal$DANeu$Reactome.pathways
+  Reactome$aged$"MO_PARK4-1" <- result.MO$Mohamed$DANeu$Reactome.pathways
+  Reactome$aged$"MO_PARK4-2" <- result.MO$Patik$DANeu$Reactome.pathways
+  Reactome$aged$"MO_PARK8-1" <- result.MO$Zagare$DANeu$Reactome.pathways
+  Reactome$aged$"MO_PARK8-2" <- result.MO$Walter$DANeu$Reactome.pathways
+
+supv <- c("orig", "fetal", "aged")
+final2 <- c("SN_1", "MO_PARK4-1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+final3 <- c("MO_PARK4-1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+MO <- NULL
+  MO$orig <- c("SN_0", "SN_1", "SN_2", "SN_3", "SN_4", "MO_PARK4-1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+  MO$fetal <- c("SN_0", "SN_1", "SN_2", "SN_3", "SN_4", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+  MO$aged <- c("SN_0", "SN_1", "SN_2", "SN_3", "SN_4", "MO_PARK4-1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+
+label5 <- NULL
+  label5$"SN_0" <- "MB-2"
+  label5$"SN_1" <- "SN-1"
+  label5$"SN_2" <- "SN-2"
+  label5$"SN_3" <- "SN-3"
+  label5$"SN_4" <- "SN-4"
+  label5$"MO_PARK4-1" <- "MO-PARK4-1"
+  label5$"MO_PARK4-2" <- "MO-PARK4-2"
+  label5$"MO_PARK8-1" <- "MO-PARK8-1"
+  label5$"MO_PARK8-2" <- "MO-PARK8-2"
+
+frame3 <- NULL
+for (k in supv) {
+    frame2 <- NULL
+    frame2 <- Reactome$orig$"SN_1" %>% data.frame
+    frame2 <- data.frame("Pathway" = frame2$Pathway)
+
+    for (i in MO[[k]]) {
+      frame1 <- Reactome[[k]][[i]] %>% filter(Pathway %in% frame2$Pathway)
+      frame1 <- frame1[,c("Pathway","FC")]
+      colnames(frame1) <- c("Pathway", paste(i))
+      frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+    #frame2 <- data.frame(frame2, "MO_add" = NA)
+    frame2 <- arrange(frame2, desc(frame2[,2]))
+    ord <- frame2$Pathway
+    #frame2 <- frame2[,1:10]
+    temp <- data.frame("Pathway" = frame2$Pathway, "SN" = rowMeans(frame2[,frame2 %>% colnames() %>% grepl(pattern="SN")]),
+    "MO" = rowMeans(frame2[,frame2 %>% colnames() %>% grepl(pattern="MO")]))
+    colnames(temp) <- c("Pathway", "SN", k)
+    frame3[[k]] <- temp
+  }
+
+df <- cbind(frame3[[1]], frame3[[2]][,"fetal"], frame3[[3]][,"aged"])
+  colnames(df) <- c("Pathway", "SN", "orig", "fetal", "aged")
+
+frame3 <- NULL
+for (k in supv) {
+    frame2 <- NULL
+    frame2 <- Reactome$orig$"SN_1" %>% data.frame
+    frame2 <- data.frame("Pathway" = frame2$Pathway)
+
+    for (i in MO[[k]]) {
+      frame1 <- Reactome[[k]][[i]] %>% filter(Pathway %in% frame2$Pathway)
+      frame1 <- frame1[,c("Pathway","FC")]
+      colnames(frame1) <- c("Pathway", paste(i))
+      frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+    #frame2 <- data.frame(frame2, "MO_add" = NA)
+    frame2 <- arrange(frame2, desc(frame2[,2]))
+    ord <- frame2$Pathway
+    #frame2 <- frame2[,1:10]
+    temp <- data.frame("Pathway" = frame2$Pathway, "SN" = frame2$SN_1,
+    "MO" = rowMeans(frame2[,frame2 %>% colnames() %>% grepl(pattern="MO")]))
+    colnames(temp) <- c("Pathway", "SN", k)
+    frame3[[k]] <- temp
+}
+  df <- cbind(frame3[[1]], frame3[[2]][,"fetal"], frame3[[3]][,"aged"])
+  colnames(df) <- c("Pathway", "SN", "orig", "fetal", "aged")
+  df <- arrange(df, desc(df$SN))
+  df <- na.omit(df)
+  ord <- df$Pathway
+  df <- df %>% pivot_longer(cols = c("SN", "orig", "fetal", "aged"))
+  df$name <- factor(df$name, levels = c("SN", "orig", "fetal", "aged"))
+  
+  Att.labs <- c("Postmortem midbrain", "Original ID", "Fetal midbrain ID", "Aged midbrain ID")
+  names(Att.labs) <- c("SN", "orig", "fetal", "aged")
+  
+  dev.new(width=6, height=10)
+  ggplot(df, aes(x = value, y = Pathway, color = name)) +
+    geom_point(size = 0.5) +
+    scale_y_discrete(limit = ord) +
+    scale_color_manual(values = c("slateblue2", "darkolivegreen3", "cornsilk4", "deeppink3")) +
+    facet_wrap(~ name, ncol=4, labeller = labeller(name = Att.labs)) +
+     labs(x=NULL, y=NULL, title="Reactome pathways", fill=NULL) + 
+          theme_bw() +
+          theme(
+          plot.margin= unit(c(1, 1, 0, 3), "lines"),
+          title=element_text(size =15, face ="bold"),
+            legend.position = "none",
+            axis.text.x=element_text(size=10, angle = 45, hjust = 1), 
+            axis.text.y=element_blank(),
+            axis.title=element_text(size=15),
+            axis.ticks.y = element_blank())
+
+ggsave(file = "compare3.png")
+dev.off()
+##################################################################################################
+frame3 <- NULL
+for (k in supv) {
+    frame2 <- NULL
+    frame2 <- Reactome$orig$"SN-1" %>% data.frame
+    frame2 <- data.frame("Pathway" = frame2$Pathway)
+
+    for (i in MO[[k]]) {
+      frame1 <- Reactome[[k]][[i]] %>% filter(Pathway %in% frame2$Pathway)
+      frame1 <- frame1[,c("Pathway","FC")]
+      colnames(frame1) <- c("Pathway", paste(i))
+      frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+    frame2 <- arrange(frame2, desc(frame2[,2]))
+    frame2$Pathway <- gsub("REACTOME_", "", frame2$Pathway)
+    frame2 <- frame2 %>% column_to_rownames("Pathway")
+    frame2 <- t(frame2)
+    frame2 <- data.frame("name" = c(rep("post", 5), rep(k,length(MO[[k]])-5)),frame2)
+    frame3[[k]] <- frame2
+}
+
+df <- rbind(frame3[[1]], frame3[[2]][6:9,], frame3[[3]][6:9,])
+df <- data.frame("name2" = paste0(rownames(df),df$name), df)
+rownames(df) <- NULL
+df <- df %>% column_to_rownames("name2")
+df <- df[-13,]
+df %>% dim
+df2 <- df[,-1]
+df$name <- factor(df$name, levels = c("post", "orig", "fetal", "aged"))
+
+#arrange(frame2, desc(frame2[,2]))
+
+df2 <- t(df2)
+df2 <- na.omit(df2)
+df2 <- t(df2)
+df2 %>% dim
+
+library(umap)
+set.seed(21)
+udf <- umap(df2)
+cord <-udf$layout %>% as.data.frame()
+dev.new(width=7, height=3)
+ggplot(cord, aes(x = V1, y = V2, color = df$name)) +
+    geom_point(size = 4) +
+    theme_bw() +
+    labs(title= NULL, x = "UMAP-1", y = "UMAP-2", color = NULL) +
+    scale_color_manual(values = c("slateblue2", "darkolivegreen3", "cornsilk4", "deeppink3"),
+    labels = c("Postmortem midbrain", "Original ID", "Fetal midbrain ID", "Aged midbrain ID")) +
+    theme(
+          plot.margin= unit(c(0, 2, 0, 2), "lines"),
+          title=element_text(size =13),
+            legend.key.height = unit(0.5, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=10), 
+            axis.text.y=element_text(size=10), 
+            axis.title=element_text(size=15)) 
+ggsave(file = "umap_reactome.png")
+dev.off()
+##################################################################################################
+##################################################################################################
+auth <- c("Smajic","Agarwal","Wang","Martirosyan","Lee", "Walter","Mohamed","Zagare","Patikas")
+
+Reactome <- NULL
+
+result.full <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_full.rds")
+Reactome$Mohamed <- result.full$Mohamed$DANeu$Reactome.pathways
+Reactome$Patikas <- result.full$Patik$DANeu$Reactome.pathways
+Reactome$Zagare <- result.full$Zagare$DANeu$Reactome.pathways
+Reactome$Walter <- result.full$Walter$DANeu$Reactome.pathways
+
+result.full <- readRDS("/home/naoto/Data/scRNA/pred/SCPA_full_SNMB.rds")
+Reactome$Smajic <- result.full$Smajic$DANeu$Reactome.pathways
+Reactome$Agarwal <- result.full$Agarwal$DANeu$Reactome.pathways
+Reactome$Wang <- result.full$Wang$DANeu$Reactome.pathways
+Reactome$Martirosyan <- result.full$Martirosyan$DANeu$Reactome.pathways
+Reactome$Lee <- result.full$Lee$DANeu$Reactome.pathways
+
+##################################################################################################
+# Wangの変化部分のみ取り出す
+
+final <- c("Wang", "Mohamed","Patikas","Walter","Zagare")
+label5 <- NULL
+label5$Wang <- "SN-1"
+label5$Mohamed <- "MO-PARK4-1"
+label5$Patikas <- "MO-PARK4-2"
+label5$Walter <- "MO-PARK8-1"
+label5$Zagare <- "MO-PARK8-2"
+
+    temp <- Reactome$Wang %>% data.frame
+    temp <- temp %>%
+    mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'deeppink3',
+                           FC < -5 & adjPval < 0.01 ~ 'royalblue2'))
+    temp <- temp %>% filter(color == "royalblue2" | color == "deeppink3")
+    temp <- data.frame("Pathway"=temp$Pathway)
+    frame2 <- temp
+
+# MLOの結果をくっつける
+
+  for (i in final) {
+    frame1 <- Reactome[[i]] %>% filter(Pathway %in% temp$Pathway)
+    frame1 <- frame1[,c("Pathway","FC")]
+    colnames(frame1) <- c("Pathway", label5[[i]])
+    frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+frame2 %>% head
+                                         Pathway       SN-1 MO-PARK4-1
+1    REACTOME_CLASS_A_1_RHODOPSIN_LIKE_RECEPTORS  -7.994409  0.8360671
+2                   REACTOME_GPCR_LIGAND_BINDING -10.413921  0.4740226
+3                       REACTOME_NEURONAL_SYSTEM  18.490877 -7.7678720
+4 REACTOME_TRANSMISSION_ACROSS_CHEMICAL_SYNAPSES  11.252465 -5.4844823
+5      REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS  -6.363030  0.7262362
+6           REACTOME_G_ALPHA_Q_SIGNALLING_EVENTS  -5.399247 -1.2352818
+   MO-PARK4-2 MO-PARK8-1 MO-PARK8-2
+1   0.1954267  0.0646554  -1.992539
+2  -0.8474693  0.1980835  -2.957558
+3 -14.9420551  1.7580277 -20.040511
+4  -6.8510572  0.6298178 -16.121144
+5   0.3070724 -0.4518486  -1.108287
+6  -1.5421452 -0.5470751  -2.767478
+
+############################################################################
+#Reactome
+    df <- frame2
+    df[is.na(df)] <- 0
+    df$Pathway <- gsub("REACTOME_", "", df$Pathway)
+    df <- df %>% column_to_rownames("Pathway")
+    df <- as.matrix(df)
+
+#dev.new(width=8, height=8)
+png("Heat_Reactome.png", width=850, height=800) 
+pheatmap(df, color = colorRampPalette(c("turquoise4", "gray88", "orangered1"))(100),
+                    clustering_method = "ward.D2",
+                    cluster_col = FALSE,
+                    fontsize_col = 18,
+                    angle_col = "45",
+                    clustering_distance_cols = "correlation", 
+                    fontsize = 14, show_rownames = T, cutree_rows = 5
+                    )
+dev.off()
+dev.off()
+############################################################################
+library(circlize)
+
+final2 <- c("SN-1", "MO-PARK4-1", "MO-PARK4-2", "MO-PARK8-1", "MO-PARK8-2")
+
+# dfをup, downにおきかえる
+df <- frame2
+for (i in final2) {
+df <- df %>% mutate(!!i := case_when(df[[i]] > 0 ~ "up", df[[i]] < 0 ~ "down"))
+}
+
+# up-up, down-dwonを抽出
+frame <- NULL
+  for (i in final2) {
+  for (j in final2) {
+    cp <- df 
+    cp <- cp %>% filter(cp[[i]] == cp[[j]])
+  
+    x <- paste(i)
+    y <- paste(j)
+
+  temp <- data.frame("x"= x, "y" = y, "value" = nrow(cp))
+  frame <- rbind(frame, temp)
+}}
+
+
+mat <- spread(frame, key = y, value = value)
+mat <- column_to_rownames(mat, "x")
+mat <- as.matrix(mat)
+diag(mat) <- 0
+
+#RowColor <- colorRampPalette(c("#ec6d51", "#3f312b", "#674196", "#82ae46"))
+#RowColor <- colorRampPalette(c("#2ca9e1", "#543f32","#f7c114","#e7609e"))
+RowColor <- colorRampPalette(c("#2ca9e1", "#e7609e", "#f7c114", "#543f32"))
+
+nm = unique(unlist(dimnames(mat)))
+group = structure(c(rep("hMB", 1), rep("hMLO", 4)),
+                names = final2)
+
+circos.clear()
+png("circle_reactome.png")
+circos.par(start.degree = 90, clock.wise = FALSE)
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+chordDiagram(mat,
+             directional = TRUE, 
+             transparency = 0.5, 
+             group = group,
+             row.col = RowColor(nrow(mat)), 
+             grid.col = RowColor(nrow(mat)))
+dev.off()
+dev.off()
+############################################################################
+result <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/predicted_hMLO_LM_Kam.rds")
+result2 <- readRDS("predicted_SNMB.rds")
+result$Wang <- result2$Wang
+
+result %>% names()
+
+react <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") 
+dnrc <- react %>% filter(gs_name == "REACTOME_DOPAMINE_NEUROTRANSMITTER_RELEASE_CYCLE")
+dnrc <- data.frame(gene = dnrc$gene_symbol)
+
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+
+DAN$Wang <- subset(temp, subset = Kamath == "DANeu")
+Idents(DAN$Wang) <- "Dx"
+
+for (i in MLO) {
+       temp <- result[[i]]
+       DAN[[i]] <- subset(temp, subset = pred.Kam == "DANeu")
+       Idents(DAN[[i]]) <- "Dx"
+}
+
+DEG$Wang <- FindMarkers(DAN$Wang,
+                    ident.1 = "CTRL",
+                    ident.2 = "PD",
+                    test.use = "DESeq2")
+DEG$Mohamed <- FindMarkers(DAN$Mohamed,
+                    ident.1 = "KO",
+                    ident.2 = "SNCA",
+                    test.use = "DESeq2")
+DEG$Patikas <- FindMarkers(DAN$Patikas,
+                    ident.1 = "SNCAc",
+                    ident.2 = "SNCAx3",
+                    test.use = "DESeq2")
+DEG$Walter <- FindMarkers(DAN$Walter,
+                    ident.1 = "WT",
+                    ident.2 = "G2019S",
+                    test.use = "DESeq2")
+DEG$Zagare <- FindMarkers(DAN$Zagare,
+                    ident.1 = "WT",
+                    ident.2 = "G2019S",
+                    test.use = "DESeq2")
+
+# そこそこ時間かかるので保存しておく
+#saveRDS(DEG, file = "DEG_DAN.rds")
+DEG <- readRDS("DEG_DAN.rds")
+
+df <- NULL
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp <- left_join(dnrc, temp, by = "gene")
+      temp[is.na(temp)] <- 0
+      temp <- temp %>% mutate(auth = label5[[i]])
+      df <- rbind(df, temp)
+}
+
+label2 <- df %>% filter(auth == "SN-1")
+label2 <- label2 %>% arrange(avg_log2FC)
+
+df$auth <- factor(df$auth, levels = final2) %>% fct_rev
+df$gene <- factor(df$gene, levels = label2$gene)
+
+# 不採用のfigure
+ggplot(df, aes(x = gene, X =, y = auth, fill = -avg_log2FC)) +
+        geom_tile() +
+        scale_fill_gradient2(low = "turquoise4", mid = "gray88", high = "orangered1") +
+   labs(x=NULL, y=NULL, title=NULL, fill="-FC") + 
+          theme_bw() +
+          theme(
+          title=element_text(size =13),
+            legend.key.height = unit(0.5, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=13, angle = 45, hjust = 1), 
+            axis.text.y=element_text(size=15), 
+            axis.title=element_text(size=15)) 
+dev.off()
+
+# clusteringを行う
+
+dff <- dnrc
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp[is.na(temp)] <- 0
+      temp <- temp[, c("gene", "avg_log2FC")]
+      colnames(temp) <- c("gene", label5[[i]])
+      dff <- left_join(dff, temp, by = "gene")
+}
+
+    dff <- dff %>% column_to_rownames("gene")
+    dff <- as.matrix(dff)
+    rd <- dist(dff)
+    rc <- hclust(d = rd, method = "ward.D2")
+    label <- data.frame("gene" = rc$labels)
+    label <- label %>% rownames_to_column("order")
+    label$order <- factor(label$order, levels = rc$order)
+    label <- arrange(label, label$order)
+# labelに並び替え順が入っている
+
+df$group <- ifelse(df$auth == "SN-1", "hSN", "hMLO")
+df$group <- factor(df$group, levels = c("hSN", "hMLO"))
+df$auth <- factor(df$auth, levels = final2) %>% fct_rev
+df$gene <- factor(df$gene, levels = label$gene)
+
+
+dev.new(width=10, height=3)
+ggplot(df, aes(x = gene, y = auth, color = -avg_log2FC, size = -log(p_val_adj))) +
+        geom_point(alpha = 1) +
+        facet_grid(group ~ ., scales ="free_y", space = "free") +
+        scale_size(breaks = c(0, 100, 300), range = c(2, 12))+
+        scale_color_gradient2(low = "orangered1", mid = "gray55", high = "turquoise4", midpoint = 0.2, limits = c(-3, 3)) +
+   labs(x=NULL, y=NULL, title="Dopamine Neurotransmitter Release Cycle", color = "-FC", size = "-log(adjP)") + 
+          theme_classic() +
+          theme(
+          title=element_text(size =13, face = "bold"),
+            legend.key.height = unit(0.3, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=13, angle = 45, hjust = 1), 
+            axis.text.y=element_text(size=15), 
+            axis.title=element_text(size=15)) 
+
+ggsave(file = "dnrc.png")
+dev.off()
+##################################################################################################
+# Fig. 5
+library(magick)
+
+img0 <- image_read("compare3.png") %>% image_resize(geometry = "x550")
+img00 <- image_read("umap_reactome.png") %>% image_resize(geometry = "x210")
+img1 <- image_read("circle_reactome.png")
+img2 <- image_read("Heat_Reactome.png") %>% image_resize(geometry = "x600")
+img3 <- image_read("dnrc.png") %>% image_resize(geometry = "700x")
+
+img0 <- image_annotate(img0, text = "A", location = "+0+0", size = 30, color = "black")
+img00 <- image_annotate(img00, text = "B", location = "+0+0", size = 30, color = "black")
+img1 <- image_annotate(img1, text = "C", location = "+0+0", size = 30, color = "black")
+img2 <- image_annotate(img2, text = "D", location = "+0+0", size = 30, color = "black")
+img3 <- image_annotate(img3, text = "E", location = "+0+0", size = 30, color = "black")
+
+img_up <- image_append(c(img0, img1, img2), stack = F)
+img_down <- image_append(c(img00, img3), stack = F)
+img <- image_append(c(img_up, img_down), stack = T)
+image_write(img, "fig5.png", format = "png")
+
+############################################################################
