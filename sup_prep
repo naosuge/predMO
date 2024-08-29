@@ -1,0 +1,168 @@
+# preparation for supervisor
+
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt update
+sudo apt upgrade
+
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+setwd("/home/naoto/Data/scRNA/pred/")
+getwd()
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(reshape2)
+library(ggrepel)
+library(scales)
+library(msigdbr)
+
+Smajic <- readRDS("/home/naoto/Data/scRNA/Smajic/smajic_v5_single_annotated.rds")
+Kamath <- readRDS("/home/naoto/Data/scRNA/Kamath/Kam80k_v4_single_annotated.rds")
+Agarwal <- readRDS("/home/naoto/Data/scRNA/Agarwal/agaw_v5_single_annotated.rds")
+Wang <- readRDS("/home/naoto/Data/scRNA/Wang/wang80k_v5_single_annotated.rds")
+Martirosyan <-  readRDS("/home/naoto/Data/scRNA/Martirosyan/mart80k_v5_single_annotated.rds")
+Lee <-  readRDS("/home/naoto/Data/scRNA/Lee/Lee_v5_single_annotated.rds")
+
+#Kamath1: #6のみがDANeu 
+#Kamath2: #6, 15がDANeu
+
+Kamath$orig.ID <- Kamath$Kamath2
+
+list <- NULL
+  list$Smajic <- Smajic
+  list$Kamath <- Kamath
+  list$Agarwal <- Agarwal
+  list$Wang <- Wang
+  list$Martirosyan <- Martirosyan
+  list$Lee <- Lee
+
+#~105GB memory occupied
+#IDはKAmathで修正 -> prediction_code参照
+
+#saveRDS(list, file = "list_SNMB.rds")
+list <- readRDS("list_SNMB.rds")
+## 先に行くなら"predicted_SNMB.rds"をあわせてreadRDSする ##
+
+pcols <- c(
+  "Neu"="pink1",
+  "Neuron"="pink1",
+  "mNeu"="orchid2",
+  "ExNeu"="pink3",
+  "InhNeu"="sienna1",
+  "GABA"="sienna1",
+  "SERT"="pink1",
+  "OMTN"="pink2",
+  "RN"="pink3",
+  "DANeu"="deeppink",
+  "NB"="cyan3",
+  "imNeu"="cyan3",
+  "RG"="steelblue3",
+  "RG1"="steelblue1",
+  "RG2"="steelblue3",
+  "RGa"="steelblue1",
+  "RGo"="steelblue3",
+  "Astro"="steelblue1",
+  "Oligo"="turquoise4",
+  "OPC"="turquoise3",
+  "Mgl"="orchid4",
+  "T"="khaki3",
+  "Prog"="olivedrab3",
+  "Peric"="sienna2",
+  "Endo"="thistle3",
+  "Unk"="ivory3"
+  )
+##############################################################################################################
+#Fig. S4
+# orig
+MBSN <- c("Kamath","Smajic","Wang","Martirosyan","Lee","Agarwal")
+markers.to.plot.sm <- c("EGR4", "LEXM", "LHX9","PAX5",
+  "POSTN","DRGX","HOXA3",
+  "GAD2","CASR","DDC", "TH", "SLC6A3","SLC18A2",      
+  "FRMPD2","AQP4", "FOLH1","MOBP","VCAN","COL9A1",
+  "RGS1","GPR65","CD86",
+  "SLC6A20","COL6A3","C7","ELTD1","CD34","SKAP1")
+my_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","GABA","SERT","OMTN","RN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","Prog","Peric","Endo","T","Unk")
+  my_levels <- factor(my_levels, levels=(my_levels))
+
+label4 <- NULL
+  label4$Kamath <- "MB-1"
+  label4$Smajic <- "MB-2"
+  label4$Wang <- "SN-1"
+  label4$Martirosyan <- "SN-2"
+  label4$Lee <- "SN-3"
+  label4$Agarwal <- "SN-4"
+
+label5 <- NULL
+  label5$Kamath <- c("A", "B", "C")
+  label5$Smajic <- c("D", "E", "F")
+  label5$Wang <- c("G", "H", "I")
+  label5$Martirosyan <- c(" J", "K", "L")
+  label5$Lee <- c("M", "N", "O")
+  label5$Agarwal <- c("P", "Q", "R")
+
+ggd <- NULL
+for (i in MBSN) {
+  data <- list[[i]]
+  Idents(data) <- "orig.ID"
+  Idents(data) <- factor(Idents(data), levels= my_levels) 
+
+   prop_cluster <- prop.table(x=table(data@active.ident))
+   df <- data.frame(prop_cluster)
+   df$Var2 <- factor(df$Var1, levels =  my_levels)
+   df <- na.omit(df)
+
+  gga <- ggplot(df, aes(x = 1, y = Freq, fill = Var1)) +
+                geom_bar(stat = "identity", position = "fill") +
+                scale_y_continuous(labels = percent) +
+                scale_fill_manual(values = pcols) +
+                labs(x=NULL, y="Ratio", title=label4[[i]], fill=NULL) + 
+                theme_minimal() +
+                theme(title=element_text(size =14, face = "bold"),
+                      legend.key.height = unit(0.2, 'cm'),
+                      legend.text=element_text(size =10),
+                      axis.text.x=element_blank(), 
+                      axis.text.y=element_text(size=10), 
+                      axis.title=element_text(size=12),
+                      panel.grid = element_blank()) 
+
+  ggb <- DimPlot(data, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.01)+
+                 labs(x="UMAP-1", y="UMAP-2", title=label4[[i]], color=NULL) +
+                 theme(
+                       title=element_text(size =14, face = "bold"),
+                       legend.key.height = unit(0.2, 'cm'),
+                       legend.text=element_text(size =10),
+                       axis.text.x=element_text(size=8), 
+                       axis.text.y=element_text(size=8), 
+                       axis.title=element_text(size=10))
+
+  Idents(data) <- factor(Idents(data), levels= my_levels) %>% fct_rev()
+
+  ggc <- DotPlot(data, features = markers.to.plot.sm, cols = c("midnightblue","deeppink3"), dot.scale = 5) +
+                 RotatedAxis() +
+                 labs(x=NULL, y=NULL, title=label4[[i]]) + 
+                 theme(
+                       title=element_text(size =14, face = "bold"),
+                       legend.key.height = unit(0.2, 'cm'),
+                       legend.title = element_text(size=8),
+                       legend.text=element_text(size =8),
+                       axis.text.x=element_text(size=9), 
+                       axis.text.y=element_text(size=9), 
+                       axis.title=element_blank()) 
+    
+  ggd[[i]] <-  plot_grid(gga, ggb, ggc, align = "v", ncol =4, rel_widths = c(.15, .2, .4, .01),
+                         labels = label5[[i]], label_x = .0, label_y = 1.05, label_size = 16)
+  }
+
+dev.new(width=11, height=13)
+  plot_grid(NULL, ggd[[1]],ggd[[2]],ggd[[3]], ggd[[4]], ggd[[5]],ggd[[6]], align = "v", 
+            ncol =1, rel_heights = c(.01, .1, .1,.1, .1, .1, .1))
+  ggsave(file="MBSN_list.png")
+  dev.off()
