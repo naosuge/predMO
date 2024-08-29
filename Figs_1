@@ -21,8 +21,6 @@ library(cowplot)
 library(scales)
 library(ggsankey)
 
-# common valuables
-
 pcols <- c(
 "Neu"="pink1",
 "Neuron"="pink1",
@@ -51,7 +49,7 @@ pcols <- c(
 )
 
 my_levels <- c("imNeu","Neu","Neu1","Neu2","Neu3","Neu4","Neu5","GABA","DANeu","RG1","RG2","RG3","RG4","RGa","RGo","Prog","Peric","Endo","Unk")
-my_levels <- factor(my_levels, levels=(my_levels))
+  my_levels <- factor(my_levels, levels=(my_levels))
 #############################################################################################################
 # Figure.1
 
@@ -163,7 +161,7 @@ plot_grid(
 ggsave(file="figure1.png", bg = "white")
 dev.off()
 #############################################################################################################
-# Figure.3
+# Figure.4
 
 result <- readRDS("predicted_hMLO_LM_Kam.rds")
 
