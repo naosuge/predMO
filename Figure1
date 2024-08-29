@@ -1,0 +1,163 @@
+conda deactivate
+export PATH="$PATH:/home/naoto/miniconda3/bin"
+export PATH="$PATH:/home/naoto/Toolbox/sratoolkit.3.0.0-ubuntu64/bin"
+
+sudo apt update
+sudo apt upgrade
+
+
+R
+Sys.setenv("http_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+Sys.setenv("https_proxy"="http://proxy.l2.med.tohoku.ac.jp:8080")
+update.packages()
+
+
+setwd("/home/naoto/Data/scRNA/Figure/")
+getwd()
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(scales)
+library(ggsankey)
+
+# common valuables
+
+pcols <- c(
+"Neu"="pink1",
+"Neuron"="pink1",
+"mNeu"="orchid2",
+"ExNeu"="pink3",
+"InhNeu"="sienna1",
+"GABA"="sienna1",
+"SERT"="pink1",
+"OMTN"="pink2",
+"RN"="pink3",
+"DANeu"="deeppink",
+"NB"="cyan3",
+"imNeu"="cyan3",
+"RG"="steelblue3",
+"RGa"="steelblue1",
+"RGo"="steelblue3",
+"Astro"="steelblue1",
+"Oligo"="turquoise4",
+"OPC"="turquoise3",
+"Mgl"="orchid4",
+"T"="khaki3",
+"Prog"="olivedrab3",
+"Peric"="sienna2",
+"Endo"="thistle3",
+"Unk"="ivory3"
+)
+
+my_levels <- c("imNeu","Neu","Neu1","Neu2","Neu3","Neu4","Neu5","GABA","DANeu","RG1","RG2","RG3","RG4","RGa","RGo","Prog","Peric","Endo","Unk")
+my_levels <- factor(my_levels, levels=(my_levels))
+#############################################################################################################
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+
+data <- NULL
+ data$Mohamed <- readRDS("/home/naoto/Data/scRNA/Mohamed/moh_v5_single_annotated2.rds")
+ data$Patikas <- readRDS("/home/naoto/Data/scRNA/Patik/patik_cor&x3_V5_sep_single_annotated.rds")
+ data$Walter <- readRDS("/home/naoto/Data/scRNA/Walter/walter_V5_d14_harmony_annotated.rds")
+ data$Zagare <- readRDS("/home/naoto/Data/scRNA/Zagare/zagare_70d_v5_single_annotated.rds")
+ data$Zagare$Dx <- factor(data$Zagare$Dx, levels= c("WT", "G2019S"))
+
+label <- NULL
+ label$Mohamed <- "MO-PARK4-1"
+ label$Patikas <- "MO-PARK4-2"
+ label$Walter <- "MO-PARK8-1"
+ label$Zagare <- "MO-PARK8-2"
+
+features <- NULL
+ features$Mohamed <- c("TH","DDC","SLC6A3","SLC18A2")
+ features$Patikas <- c("TH","DDC","SLC6A3","SLC18A2")
+ features$Walter <- c("TH","DDC","SLC6A3","SLC18A2")
+ features$Zagare <- c("TH","DDC","SLC18A2")
+
+label1 <- NULL
+ label1$Mohamed$upper <- c("A", NA) 
+ label1$Mohamed$middle <- c("B", "C")
+ label1$Mohamed$low <- c("D", NA)
+ label1$Patikas$upper <-  c("E", NA) 
+ label1$Patikas$middle <-  c("F", "G")
+ label1$Patikas$low <- c("H", NA)
+ label1$Walter$upper <-  c("I", NA) 
+ label1$Walter$middle <-  c("J", "K")
+ label1$Walter$low <- c("L", NA)
+ label1$Zagare$upper <-  c("M", NA) 
+ label1$Zagare$middle <-  c("N", "O")
+ label1$Zagare$low <- c("P", NA)
+
+ggg <- NULL
+
+markers.to.plot <- c("SNAP25","MAPT","GAD1","PNOC","TH", "DDC","SLC6A3","SLC18A2", "DRD2", "ALDH1A1",
+"SPATA22","AQP4","GSX1","OLIG1","TOP2A","MKI67","CDHR3","COL21A1","COL3A1")
+
+for (i in MLO) {
+    int <- data[[i]]
+    prop_cluster <- prop.table(x=table(int@meta.data$Dx, int$orig.ID), margin =2)
+    df <- data.frame(prop_cluster)
+    df$Var2 <- factor(df$Var2, levels = unique(df$Var2)) %>% fct_rev
+
+    Idents(int) <- factor(Idents(int), levels= my_levels) %>% fct_rev()
+    gg1<- DotPlot(int, features = markers.to.plot, cols = c("midnightblue","deeppink3"), dot.scale = 6) +
+      RotatedAxis()+
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size=10), 
+            legend.title = element_text(size=12),
+            legend.text = element_text(size=8),
+            legend.key.height = unit(0.2, 'cm'))
+
+    Idents(int) <- factor(Idents(int), levels= my_levels)
+    gg2a <- DimPlot(int, reduction = "umap", cols = pcols, label = FALSE, pt.size = 0.1, raster=FALSE) +
+            theme(legend.key.size = unit(0.3, 'cm'))
+
+    gg2b <- VlnPlot(int, features = features[[i]], pt.size = 0, stack = T, flip = T) +
+     theme(legend.position = "none", 
+           axis.title.x = element_blank(), 
+           axis.title.y=element_text(size=11), 
+           axis.text.x=element_text(size=10))
+
+    df$Var2 <- factor(df$Var2, levels = unique(df$Var2)) %>% fct_rev
+    gg3a <- ggplot(df, aes(x = Var2, y = Freq, fill = Var1)) +
+            geom_bar(stat = "identity", position = "fill") +
+            scale_y_continuous(labels = percent) +
+            scale_fill_manual(values = c("deepskyblue2","deeppink1")) +
+            labs(x=NULL, y="Ratio", title="The ratio of original ID \n in each cluster", fill=NULL) +           
+            theme_bw() +
+            theme(
+              title=element_text(size =10),
+              legend.text=element_text(size =12), 
+              axis.text.x=element_text(size=10, angle = 45, hjust = 1), 
+              axis.text.y=element_text(size=10), 
+              axis.title=element_text(size=13),
+              legend.key.size = unit(0.5, 'cm'),
+              legend.key.width = unit(0.2, 'cm'),
+              legend.box.spacing = unit(0, 'cm'))
+
+    gg3b <- FeaturePlot(int, split.by = "Dx", features = c("TH"), cols =c("grey","deeppink3"), pt.size = 2)
+
+    upper.panel <- plot_grid(NULL, gg1, align = "hv", rel_widths = c(.001, .09), ncol = 2,
+      labels = label1[[i]]$upper, label_x = .0, label_y = 1.1, label_size = 14)
+    middle.panel <- plot_grid(gg2b, gg3a, align = "h", rel_widths = c(.5, .5), ncol = 2,
+      labels = label1[[i]]$middle, label_x = .0, label_y = 1.1, label_size = 14)
+    lower.panel <- plot_grid(gg3b, NULL, align = "hv", rel_widths = c(.8, .2), ncol = 2,
+      labels = label1[[i]]$low, label_x = .0, label_y = 1., label_size = 14)
+
+    ggg[[i]] <- plot_grid(
+       NULL, upper.panel, middle.panel, lower.panel, 
+       ncol = 1,
+       rel_heights = c(.02, .08, .08,.08),
+       labels = c(label[[i]], NA, NA, NA),
+       label_x = -.05, label_y = 1.0, label_size = 16)
+}
+
+dev.new(width=12, height=14)
+plot_grid(
+   ggg[[1]], ggg[[2]], ggg[[3]], ggg[[4]], 
+   ncol = 2,
+   rel_widths = c(.1, .1))
+ggsave(file="figure1.png", bg = "white")
+dev.off()
+#############################################################################################################
