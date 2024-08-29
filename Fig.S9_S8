@@ -3,10 +3,13 @@ library(msigdbr)
 library(pheatmap)
 library(RColorBrewer)
 
+
+############################################################################
+#Fig. S9
+
 final <- c("Wang", "Mohamed","Patikas","Walter","Zagare")
 
-# L1CAMについて
-
+# L1CAM
 DEG <- readRDS(file = "DEG_DAN.rds")
 
 react <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") 
