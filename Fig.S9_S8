@@ -248,3 +248,221 @@ img <- image_append(c(img1, img2, img3), stack = T)
 image_write(img, "suppl.png", format = "png")
 
 ##################################################################################################
+##################################################################################################
+#Fig. S8
+
+# prediction by La Manno
+# circlize
+result.SN <- readRDS("/home/naoto/Data/scRNA/pred/SCPA_full_SNMB.rds")
+result.MO <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_MLO_sLM.rds")
+Reactome <- NULL
+Reactome$fetal$"SN_0" <- result.SN$Smajic$DANeu$Reactome.pathways
+Reactome$fetal$"SN_1" <- result.SN$Wang$DANeu$Reactome.pathways
+Reactome$fetal$"SN_2" <- result.SN$Martirosyan$DANeu$Reactome.pathways
+Reactome$fetal$"SN_3" <- result.SN$Lee$DANeu$Reactome.pathways
+Reactome$fetal$"SN_4" <- result.SN$Agarwal$DANeu$Reactome.pathways
+Reactome$fetal$"MO_PARK4-1" <- result.MO$Mohamed$DANeu$Reactome.pathways #NULL
+Reactome$fetal$"MO_PARK4-2" <- result.MO$Patik$DANeu$Reactome.pathways
+Reactome$fetal$"MO_PARK8-1" <- result.MO$Zagare$DANeu$Reactome.pathways
+Reactome$fetal$"MO_PARK8-2" <- result.MO$Walter$DANeu$Reactome.pathways
+
+fetal <- c("SN_1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+
+    temp <- Reactome$fetal$"SN_1" %>% data.frame
+    temp <- temp %>%
+    mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'deeppink3',
+                           FC < -5 & adjPval < 0.01 ~ 'royalblue2'))
+    temp <- temp %>% filter(color == "royalblue2" | color == "deeppink3")
+    temp <- data.frame("Pathway"=temp$Pathway)
+    frame2 <- temp
+
+# bind
+
+  for (i in fetal) {
+    frame1 <- Reactome$fetal[[i]] %>% filter(Pathway %in% temp$Pathway)
+    frame1 <- frame1[,c("Pathway","FC")]
+    colnames(frame1) <- c("Pathway", i)
+    frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+frame2 %>% head
+
+
+library(circlize)
+
+# dfをup, downにおきかえる
+df <- frame2
+for (i in fetal) {
+  df <- df %>% mutate(!!i := case_when(df[[i]] > 0 ~ "up", df[[i]] < 0 ~ "down"))
+  }
+
+# up-up, down-dwonを抽出
+frame <- NULL
+  for (i in fetal) {
+  for (j in fetal) {
+    cp <- df 
+    cp <- cp %>% filter(cp[[i]] == cp[[j]])
+  
+    x <- paste(i)
+    y <- paste(j)
+
+  temp <- data.frame("x"= x, "y" = y, "value" = nrow(cp))
+  frame <- rbind(frame, temp)
+  }}
+
+
+mat <- spread(frame, key = y, value = value)
+  mat <- column_to_rownames(mat, "x")
+  mat <- as.matrix(mat)
+  diag(mat) <- 0
+  RowColor <- colorRampPalette(c("#2ca9e1", "#e7609e", "#f7c114", "#543f32"))
+  nm = unique(unlist(dimnames(mat)))
+  group = structure(c(rep("hMB", 1), rep("hMLO", 3)),
+                names = fetal)
+
+circos.clear()
+png("circle_fetal.png")
+circos.par(start.degree = 90, clock.wise = FALSE)
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+chordDiagram(mat,
+             directional = TRUE, 
+             transparency = 0.5, 
+             group = group,
+             row.col = RowColor(nrow(mat)), 
+             grid.col = RowColor(nrow(mat)))
+dev.off()
+dev.off()
+############
+    df <- frame2
+    df[is.na(df)] <- 0
+    df$Pathway <- gsub("REACTOME_", "", df$Pathway)
+    df <- df %>% column_to_rownames("Pathway")
+    df <- as.matrix(df)
+
+png("Heat_Reactome_fetal.png", width=850, height=800) 
+pheatmap(df, color = colorRampPalette(c("turquoise4", "gray88", "orangered1"))(100),
+                    clustering_method = "ward.D2",
+                    cluster_col = FALSE,
+                    fontsize_col = 18,
+                    angle_col = "45",
+                    clustering_distance_cols = "correlation", 
+                    fontsize = 14, show_rownames = T, cutree_rows = 5
+                    )
+dev.off()
+dev.off()
+
+##################################################################################################
+##################################################################################################
+# Original
+# circlize
+
+result.SN <- readRDS("/home/naoto/Data/scRNA/pred/SCPA_full_SNMB.rds")
+
+Reactome <- NULL
+result.MO <- readRDS("/home/naoto/Data/scRNA/pred_hMLO/SCPA_orig.rds")
+Reactome$orig$"SN_0" <- result.SN$Smajic$DANeu$Reactome.pathways
+Reactome$orig$"SN_1" <- result.SN$Wang$DANeu$Reactome.pathways
+Reactome$orig$"SN_2" <- result.SN$Martirosyan$DANeu$Reactome.pathways
+Reactome$orig$"SN_3" <- result.SN$Lee$DANeu$Reactome.pathways
+Reactome$orig$"SN_4" <- result.SN$Agarwal$DANeu$Reactome.pathways
+Reactome$orig$"MO_PARK4-1" <- result.MO$Mohamed$DANeu$Reactome.pathways
+Reactome$orig$"MO_PARK4-2" <- result.MO$Patik$DANeu$Reactome.pathways
+Reactome$orig$"MO_PARK8-1" <- result.MO$Zagare$DANeu$Reactome.pathways
+Reactome$orig$"MO_PARK8-2" <- result.MO$Walter$DANeu$Reactome.pathways
+
+orig <- c("SN_1", "MO_PARK4-1", "MO_PARK4-2", "MO_PARK8-1", "MO_PARK8-2")
+
+    temp <- Reactome$orig$"SN_1" %>% data.frame
+    temp <- temp %>%
+    mutate(color = case_when(FC > 5 & adjPval < 0.01 ~ 'deeppink3',
+                           FC < -5 & adjPval < 0.01 ~ 'royalblue2'))
+    temp <- temp %>% filter(color == "royalblue2" | color == "deeppink3")
+    temp <- data.frame("Pathway"=temp$Pathway)
+    frame2 <- temp
+
+  for (i in orig) {
+    frame1 <- Reactome$orig[[i]] %>% filter(Pathway %in% temp$Pathway)
+    frame1 <- frame1[,c("Pathway","FC")]
+    colnames(frame1) <- c("Pathway", i)
+    frame2 <- left_join(frame2, frame1, by = "Pathway")
+    }
+frame2 %>% head
+
+
+library(circlize)
+
+# dfをup, downにおきかえる
+df <- frame2
+for (i in orig) {
+  df <- df %>% mutate(!!i := case_when(df[[i]] > 0 ~ "up", df[[i]] < 0 ~ "down"))
+  }
+
+# up-up, down-dwonを抽出
+frame <- NULL
+  for (i in orig) {
+  for (j in orig) {
+    cp <- df 
+    cp <- cp %>% filter(cp[[i]] == cp[[j]])
+  
+    x <- paste(i)
+    y <- paste(j)
+
+  temp <- data.frame("x"= x, "y" = y, "value" = nrow(cp))
+  frame <- rbind(frame, temp)
+}}
+
+
+mat <- spread(frame, key = y, value = value)
+  mat <- column_to_rownames(mat, "x")
+  mat <- as.matrix(mat)
+  diag(mat) <- 0
+  RowColor <- colorRampPalette(c("#2ca9e1", "#e7609e", "#f7c114", "#543f32"))
+  nm = unique(unlist(dimnames(mat)))
+  group = structure(c(rep("hMB", 1), rep("hMLO", 4)),
+                names = orig)
+
+circos.clear()
+png("circle_orig.png")
+circos.par(start.degree = 90, clock.wise = FALSE)
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+chordDiagram(mat,
+             directional = TRUE, 
+             transparency = 0.5, 
+             group = group,
+             row.col = RowColor(nrow(mat)), 
+             grid.col = RowColor(nrow(mat)))
+dev.off()
+dev.off()
+############
+    df <- frame2
+    df[is.na(df)] <- 0
+    df$Pathway <- gsub("REACTOME_", "", df$Pathway)
+    df <- df %>% column_to_rownames("Pathway")
+    df <- as.matrix(df)
+png("Heat_Reactome_orig.png", width=850, height=800) 
+pheatmap(df, color = colorRampPalette(c("turquoise4", "gray88", "orangered1"))(100),
+                    clustering_method = "ward.D2",
+                    cluster_col = FALSE,
+                    fontsize_col = 18,
+                    angle_col = "45",
+                    clustering_distance_cols = "correlation", 
+                    fontsize = 14, show_rownames = T, cutree_rows = 5
+                    )
+dev.off()
+dev.off()
+##################################################################################################
+library(magick)
+
+img1 <- image_read("circle_orig.png") 
+img2 <- image_read("Heat_Reactome_orig.png") %>% image_resize(geometry = "1000x")
+img3 <- image_read("circle_fetal.png") 
+img4 <- image_read("Heat_Reactome_fetal.png") %>% image_resize(geometry = "1000x")
+
+img1 <- image_annotate(img1, text = "A", location = "+0+0", size = 30, color = "black")
+img2 <- image_annotate(img2, text = "B", location = "+0+0", size = 30, color = "black")
+img3 <- image_annotate(img3, text = "C", location = "+0+0", size = 30, color = "black")
+img4 <- image_annotate(img4, text = "D", location = "+0+0", size = 30, color = "black")
+
+img_up <- image_append(c(img1, img2), stack = T)
+img_down <- image_append(c(img3, img4), stack = T)
+img <- image_append(c(img_up, img_down), stack = F)
+image_write(img, "suppl_10.png", format = "png")
