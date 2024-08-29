@@ -53,6 +53,8 @@ pcols <- c(
 my_levels <- c("imNeu","Neu","Neu1","Neu2","Neu3","Neu4","Neu5","GABA","DANeu","RG1","RG2","RG3","RG4","RGa","RGo","Prog","Peric","Endo","Unk")
 my_levels <- factor(my_levels, levels=(my_levels))
 #############################################################################################################
+# Figure.1
+
 MLO <- c("Mohamed","Patikas","Walter","Zagare")
 
 data <- NULL
@@ -161,3 +163,76 @@ plot_grid(
 ggsave(file="figure1.png", bg = "white")
 dev.off()
 #############################################################################################################
+# Figure.3
+
+result <- readRDS("predicted_hMLO_LM_Kam.rds")
+
+MLO <- c("Mohamed","Patikas","Walter","Zagare")
+pred <- c("simple.LM", "orig.ID", "pred.Kam")
+pred_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","SERT","OMTN","RN","GABA","DAN","DANeu","NB","imNeu","RG","RG1","RG2","RGa","RGo","Astro","Oligo","OPC","Mgl","T","Prog","Peric","Endo","Unk")
+pred_levels <- factor(pred_levels, levels=(pred_levels))
+
+label <- NULL
+label$Mohamed <- "MO-PARK4-1"
+label$Patikas <- "MO-PARK4-2"
+label$Walter <- "MO-PARK8-1"
+label$Zagare <- "MO-PARK8-2"
+
+label2 <- NULL
+label2$Mohamed <- c("A", "B", "C", "D")
+label2$Patikas <- c("E", "F", "G", "H")
+label2$Walter <-  c("I", "J", "K", "L")
+label2$Zagare <- c("M", "N", "O", "P")
+
+df <- NULL
+ggs <- NULL
+
+ for (i in MLO) {
+    query <- result[[i]]
+    df1<- query$orig.ID %>% data.frame
+    colnames(df1) <- "orig.ID"
+    df1 <- rownames_to_column(df1, "cell.id")
+    df2 <- query@meta.data$simple.LM %>% data.frame
+    colnames(df2) <- "simple.LM"   
+    df3 <- query@meta.data$pred.Kam %>% data.frame
+    colnames(df3) <- "pred.Kam" 
+    df <- data.frame(df1 ,df2, df3)
+    df <- df %>% make_long(pred)
+    df$node <- factor(df$node, levels= pred_levels)%>% fct_rev()
+
+  gg1 <- ggplot(df, aes(x = x, 
+                 next_x = next_x, 
+                 node = node, 
+                 next_node = next_node,
+                 fill = factor(node),
+                 label = node)) +
+    geom_sankey(flow.alpha = 0.5, node.color = 1) +
+    geom_sankey_label(size = 4, color = "black") +
+    scale_fill_manual(values = pcols) +
+    scale_x_discrete(labels =c("Fetal midbrain ID","Original ID","Aged midbrain ID")) +
+    labs(title = NULL, x= NULL, y = label[[i]]) +
+    theme_sankey(base_size = 20) +
+    theme(legend.position = "none") 
+
+Idents(query) <- "simple.LM"
+    query@active.ident <- factor(query@active.ident, levels= pred_levels)
+gg2 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+   labs(x="UMAP-1", y="UMAP-2", title="Fetal midbrain ID", color=NULL) 
+Idents(query) <- "orig.ID"
+    query@active.ident <- factor(query@active.ident, levels= pred_levels)
+gg3 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+   labs(x="UMAP-1", y="UMAP-2", title="Original ID", color=NULL) 
+Idents(query) <- "pred.Kam"
+    query@active.ident <- factor(query@active.ident, levels= pred_levels)
+gg4 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+   labs(x="UMAP-1", y="UMAP-2", title="Aged midbrain ID", color=NULL) 
+ggs[[i]] <- plot_grid(gg1,gg2,gg3,gg4, align = "h", ncol=4, rel_widths = c(.25, .2, .2, .2),
+ labels = label2[[i]], label_x = .05, label_y = 1.05, label_size = 18)
+}
+
+ dev.new(width=18, height=15)
+ plot_grid(NULL, ggs[[1]],ggs[[2]],ggs[[3]],ggs[[4]], align = "v", ncol =1, rel_heights = c(0.1, 1, 1, 1, 1))
+ 
+ ggsave(file="summary_predicted.png", bg = "white")
+ dev.off()
+#####################################################################################
