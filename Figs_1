@@ -173,21 +173,21 @@ pred_levels <- c("Neu","Neuron","mNeu","ExNeu","InhNeu","SERT","OMTN","RN","GABA
 pred_levels <- factor(pred_levels, levels=(pred_levels))
 
 label <- NULL
-label$Mohamed <- "MO-PARK4-1"
-label$Patikas <- "MO-PARK4-2"
-label$Walter <- "MO-PARK8-1"
-label$Zagare <- "MO-PARK8-2"
+  label$Mohamed <- "MO-PARK4-1"
+  label$Patikas <- "MO-PARK4-2"
+  label$Walter <- "MO-PARK8-1"
+  label$Zagare <- "MO-PARK8-2"
 
 label2 <- NULL
-label2$Mohamed <- c("A", "B", "C", "D")
-label2$Patikas <- c("E", "F", "G", "H")
-label2$Walter <-  c("I", "J", "K", "L")
-label2$Zagare <- c("M", "N", "O", "P")
+  label2$Mohamed <- c("A", "B", "C", "D")
+  label2$Patikas <- c("E", "F", "G", "H")
+  label2$Walter <-  c("I", "J", "K", "L")
+  label2$Zagare <- c("M", "N", "O", "P")
 
 df <- NULL
 ggs <- NULL
 
- for (i in MLO) {
+for (i in MLO) {
     query <- result[[i]]
     df1<- query$orig.ID %>% data.frame
     colnames(df1) <- "orig.ID"
@@ -214,25 +214,71 @@ ggs <- NULL
     theme_sankey(base_size = 20) +
     theme(legend.position = "none") 
 
-Idents(query) <- "simple.LM"
-    query@active.ident <- factor(query@active.ident, levels= pred_levels)
-gg2 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
-   labs(x="UMAP-1", y="UMAP-2", title="Fetal midbrain ID", color=NULL) 
-Idents(query) <- "orig.ID"
-    query@active.ident <- factor(query@active.ident, levels= pred_levels)
-gg3 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
-   labs(x="UMAP-1", y="UMAP-2", title="Original ID", color=NULL) 
-Idents(query) <- "pred.Kam"
-    query@active.ident <- factor(query@active.ident, levels= pred_levels)
-gg4 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
-   labs(x="UMAP-1", y="UMAP-2", title="Aged midbrain ID", color=NULL) 
-ggs[[i]] <- plot_grid(gg1,gg2,gg3,gg4, align = "h", ncol=4, rel_widths = c(.25, .2, .2, .2),
- labels = label2[[i]], label_x = .05, label_y = 1.05, label_size = 18)
-}
+  Idents(query) <- "simple.LM"
+  query@active.ident <- factor(query@active.ident, levels= pred_levels)
+  gg2 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+                 labs(x="UMAP-1", y="UMAP-2", title="Fetal midbrain ID", color=NULL) 
+  Idents(query) <- "orig.ID"
+  query@active.ident <- factor(query@active.ident, levels= pred_levels)
+  gg3 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+         labs(x="UMAP-1", y="UMAP-2", title="Original ID", color=NULL) 
+  Idents(query) <- "pred.Kam"
+  
+  query@active.ident <- factor(query@active.ident, levels= pred_levels)
+  gg4 <- DimPlot(query, reduction = "umap", label = FALSE, cols= pcols, pt.size = 0.1)+
+         labs(x="UMAP-1", y="UMAP-2", title="Aged midbrain ID", color=NULL) 
+  ggs[[i]] <- plot_grid(gg1,gg2,gg3,gg4, align = "h", ncol=4, rel_widths = c(.25, .2, .2, .2),
+  labels = label2[[i]], label_x = .05, label_y = 1.05, label_size = 18)
+  }
 
- dev.new(width=18, height=15)
+dev.new(width=18, height=15)
  plot_grid(NULL, ggs[[1]],ggs[[2]],ggs[[3]],ggs[[4]], align = "v", ncol =1, rel_heights = c(0.1, 1, 1, 1, 1))
  
  ggsave(file="summary_predicted.png", bg = "white")
  dev.off()
 #####################################################################################
+# Fig. S6
+# ratio of cell ID
+
+label3 <- NULL
+  label3$Mohamed <- c("A", "B", "C")
+  label3$Patikas <- c("D", "E", "F")
+  label3$Walter <-  c("G", "H", "I")
+  label3$Zagare <- c(" J", "K", "L")
+
+gg <- NULL
+result$Zagare@meta.data$Dx <- factor(result$Zagare@meta.data$Dx, levels = c("WT", "G2019S"))
+
+for (i in MLO) {
+  for (j in pred) {
+    prop_cluster <- prop.table(x=table(result[[i]]@meta.data$Dx, result[[i]]@meta.data[[j]]), margin =2)
+    df3 <- data.frame(prop_cluster)
+    df3$Var2 <- factor(df3$Var2, levels =  pred_levels)
+    df3 <- na.omit(df3)
+
+    gg[[j]] <- ggplot(df3, aes(x = Var1, y = Freq, fill = Var2)) +
+                      geom_bar(stat = "identity", position = "fill") +
+                      scale_y_continuous(labels = percent) +
+                      scale_fill_manual(values = pcols) +
+                      labs(x=NULL, y= label[[i]], title=NULL, fill=NULL) + 
+                      theme_bw() +
+                      theme(title=element_text(size =13, face = "bold"),
+                            legend.key.height = unit(0.5, 'cm'),
+                            legend.text=element_text(size =12),
+                            axis.text.x=element_text(size=13, angle = 30, hjust = 1), 
+                            axis.text.y=element_text(size=10), 
+                            axis.title=element_text(size=12)) 
+  }
+  ggs[[i]] <- plot_grid(gg[[1]],gg[[2]],gg[[3]], align = "v", ncol =3, rel_widths = c(1, 1, 1),
+                        labels = label3[[i]], label_x = -.02, label_y = 1.08, label_size = 18)
+}
+upper <- plot_grid(NA, NA, NA, align = "v", ncol =3, rel_widths = c(1, 1, 1),
+                   labels = c("Fetal midbrain ID","   Original ID","Aged midbrain ID"),
+                   label_x = -0.1, label_y = 1., label_size = 16)
+
+dev.new(width=10, height=10)
+   plot_grid(upper, 
+             ggs[[1]],ggs[[2]],ggs[[3]], ggs[[4]], align = "v", ncol =1, rel_heights = c(.2, 1, 1, 1, 1))
+ ggsave(file="predicted_ratio.png")
+ dev.off()
+#############################################################################################################
