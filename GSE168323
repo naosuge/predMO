@@ -92,10 +92,6 @@ list
 24807 features across 91034 samples within 1 assay 
 Active assay: RNA (24807 features, 0 variable features)
 
-#前回。あれ違う?
-#32972 features across 40948 samples within 1 assay 
-#Active assay: RNA (32972 features, 0 variable features)
-
 list <- SplitObject(list, split.by = "orig.ident")
 for (i in 1:length(list)) {
 list[[i]] <- NormalizeData(list[[i]], normalization.method = "LogNormalize", scale.factor = 10000)
@@ -146,7 +142,7 @@ list.single <- NULL
 for (i in 1:length(list)) {
   DFC <- colnames(list[[i]]@meta.data)[6]
 
-  # Doubletを取り除く
+  # remove Doublet
   Idents(list[[i]]) <- DFC
   list.single[[i]] <- subset(list[[i]], idents = "Singlet")
   list.single[[i]]
