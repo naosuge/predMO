@@ -1,0 +1,250 @@
+library(tidyverse)
+library(msigdbr)
+library(pheatmap)
+library(RColorBrewer)
+
+final <- c("Wang", "Mohamed","Patikas","Walter","Zagare")
+
+# L1CAMについて
+
+DEG <- readRDS(file = "DEG_DAN.rds")
+
+react <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") 
+l1cam <- react %>% filter(gs_name == "REACTOME_L1CAM_INTERACTIONS")
+l1cam <- data.frame(gene = l1cam$gene_symbol)
+l1cam <- unique(l1cam)
+
+#retro <- react %>% filter(gs_name == "REACTOME_GOLGI_TO_ER_RETROGRADE_TRANSPORT")
+temp <- react %>% filter(grepl("RETROGRADE", gs_name))
+unique(temp$gs_name)
+
+retro <- react %>% filter(gs_name == "REACTOME_COPI_DEPENDENT_GOLGI_TO_ER_RETROGRADE_TRAFFIC")
+retro <- data.frame(gene = retro$gene_symbol)
+retro <- unique(retro)
+
+
+nrow(l1cam) #[1] 121
+nrow(retro) #[1] 100
+intersect(l1cam$gene,retro$gene) %>% length() #[1] 21
+
+l1.retro <- full_join(l1cam, retro, by = "gene")
+
+df <- NULL
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp <- left_join(l1.retro, temp, by = "gene")
+      temp[is.na(temp)] <- 0
+      temp <- temp %>% mutate(auth = label5[[i]])
+      df <- rbind(df, temp)
+}
+
+
+df.wang <- df %>% filter(auth == "SN-1")
+df.wang <- df.wang %>% filter(avg_log2FC >0)
+
+df.l1 <- df.wang %>% filter(gene %in% l1cam$gene)
+df.l1 <- df.l1 %>% arrange(avg_log2FC)
+
+df.retro <- df.wang %>% filter(!gene %in% l1cam$gene)
+df.retro <- df.retro %>% arrange(desc(avg_log2FC))
+
+dfu <- rbind(df.l1, df.retro)
+df <- df %>% filter(gene %in% dfu$gene)
+df$gene <- factor(df$gene, levels = dfu$gene)
+df$auth <- factor(df$auth, levels = final2) %>% fct_rev
+
+
+df$group <- ifelse(df$auth == "SN-1", "hSN", "hMLO")
+df$group <- factor(df$group, levels = c("hSN", "hMLO"))
+
+df$group2 <- ifelse(df$gene %in% l1cam$gene, "L1CAM interactions", NA)
+df$group2 <- ifelse(df$gene %in% retro$gene, "COPI-dependent Golgi-to-ER retrograde traffic", df$group2)
+df$group2 <- ifelse(df$gene %in% intersect(l1cam$gene,retro$gene) , "OVERLAPPED", df$group2)
+df$group2 <- factor(df$group2, levels = c("L1CAM interactions", "OVERLAPPED", "COPI-dependent Golgi-to-ER retrograde traffic"))
+
+dev.new(width=16, height=3)
+ggplot(df, aes(x = gene, y = auth, color = -avg_log2FC, size = -log(p_val_adj))) +
+        geom_point(alpha = 1) +
+        facet_grid(group ~ group2, scales ="free", space = "free") +
+        scale_size(breaks = c(0, 10, 100), range = c(2, 12))+
+        scale_color_gradient2(low = "orangered1", mid = "gray55", high = "turquoise4", midpoint = 0.2, limits = c(-3, 3)) +
+   labs(x=NULL, y=NULL, title="L1CAM interactions, COPI-dependent Golgi-to-ER retrograde traffic", color = "-FC", size = "-log(adjP)") + 
+          theme_classic() +
+          theme(
+          title=element_text(size =13, face = "bold"),
+            legend.key.height = unit(0.3, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=10, angle = 45, hjust = 1), 
+            axis.text.y=element_text(size=15), 
+            axis.title=element_text(size=15)) 
+
+ggsave(file = "l1_retro.png")
+dev.off()
+############################################################################
+# Neurotransmitterとして広くとらえる
+
+react <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") 
+trans <- react %>% filter(gs_name == "REACTOME_NEUROTRANSMITTER_RELEASE_CYCLE")
+trans <- data.frame(gene = trans$gene_symbol)
+trans <- unique(trans)
+
+nrow(trans) #51
+dnrc %>% nrow #[1] 23
+intersect(dnrc$gene, trans$gene) %>% length #[1] 23
+# dnrcはすべてtransに含まれる
+
+
+df <- NULL
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp <- left_join(trans, temp, by = "gene")
+      temp[is.na(temp)] <- 0
+      temp <- temp %>% mutate(auth = label5[[i]])
+      df <- rbind(df, temp)
+}
+
+df$group <- ifelse(df$auth == "SN-1", "hSN", "hMLO")
+df$group <- factor(df$group, levels = c("hSN", "hMLO"))
+df$auth <- factor(df$auth, levels = final2) %>% fct_rev
+
+label.i <- c(label$gene, setdiff(trans$gene, dnrc$gene))
+label.i <- factor(label.i, levels = label.i)
+df$gene <- factor(df$gene, levels = label.i)
+
+df$group2 <- ifelse(df$gene %in% label$gene, "Dopamine Neurotransmitter Release Cycle", "other Neurotransmitter Release Cycle")
+
+dev.new(width=16, height=3)
+ggplot(df, aes(x = gene, y = auth, color = -avg_log2FC, size = -log(p_val_adj))) +
+        geom_point(alpha = 1) +
+        facet_grid(group ~ group2, scales ="free", space = "free") +
+        scale_size(breaks = c(0, 10, 100), range = c(2, 12))+
+        scale_color_gradient2(low = "orangered1", mid = "gray55", high = "turquoise4", midpoint = 0.2, limits = c(-3, 3)) +
+   labs(x=NULL, y=NULL, title="Neurotransmitter Release Cycle", color = "-FC", size = "-log(adjP)") + 
+          theme_classic() +
+          theme(
+          title=element_text(size =13, face = "bold"),
+            legend.key.height = unit(0.3, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=10, angle = 45, hjust = 1), 
+            axis.text.y=element_text(size=15), 
+            axis.title=element_text(size=15)) 
+
+ggsave(file = "dop_trans.png")
+dev.off()
+############################################################################
+# Signaling by GPCR
+
+react <- msigdbr("Homo sapiens", "C2", "CP:REACTOME") 
+temp <- react %>% filter(grepl("GPCR", gs_name))
+unique(temp$gs_name)
+#[1] "REACTOME_GPCR_LIGAND_BINDING" "REACTOME_SIGNALING_BY_GPCR"  
+
+gpcr <- react %>% filter(gs_name == "REACTOME_SIGNALING_BY_GPCR")
+gpcr <- data.frame(gene = gpcr$gene_symbol)
+gpcr <- unique(gpcr)
+
+
+#このあとクラスタリングを行い、共通して低下しているところを抽出する。
+
+df <- NULL
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp <- left_join(gpcr, temp, by = "gene")
+      temp[is.na(temp)] <- 0
+      temp <- temp %>% mutate(auth = label5[[i]])
+      df <- rbind(df, temp)
+}
+    gene     p_val  avg_log2FC pct.1 pct.2 p_val_adj auth
+1 ABHD12 0.6627266  0.01340745 0.196 0.180         1 Wang
+2  ABHD6 0.8126640  0.27919980 0.034 0.047         1 Wang
+3    ABR 0.3975185 -0.31861177 0.162 0.177         1 Wang
+4  ACKR1 0.8925796 -0.69347807 0.022 0.024         1 Wang
+5  ACKR2 0.0000000  0.00000000 0.000 0.000         0 Wang
+6  ACKR3 0.0000000  0.00000000 0.000 0.000         0 Wang
+
+
+#このあとクラスタリングを行い、共通して低下しているところを抽出する。
+dff <- gpcr
+for (i in final) {
+      temp <- DEG[[i]] %>% rownames_to_column("gene")
+      temp <- temp[, c("gene", "avg_log2FC")]
+      dff <- left_join(dff, temp, by = "gene")
+      dff[is.na(dff)] <- 0
+      dff <- rename(dff, !!i :=avg_log2FC)
+}
+
+    dff <- dff %>% filter(Wang >0)
+    dff <- dff %>% column_to_rownames("gene")
+    dff <- as.matrix(dff)
+
+             Wang     Mohamed    Patikas      Walter      Zagare
+ABHD12 0.01340745  0.07466748  0.5045908  0.06459119  0.10271756
+ABHD6  0.27919980  0.01329766  0.4654516 -0.63355964 -0.03381690
+ADCY1  1.96162408 -0.55315047  1.4476166 -1.30379542 -0.05688888
+ADCY3  0.51508076 -0.52618189  0.2204925  0.00000000  0.26239926
+ADCY8  1.23260944 -2.15504460 -0.1151718  0.00000000  4.58616725
+ADCY9  0.93417288  0.72307308 -0.2734404 -0.32134599  0.40125669
+
+
+# クラスタリングのためにpheatmapを使用する
+hm <- pheatmap(dff, color = colorRampPalette(c("turquoise4", "gray88", "orangered1"))(100),
+                    clustering_method = "ward.D2",
+                    cluster_col = FALSE,
+                    fontsize_col = 18,
+                    angle_col = "45",
+                    clustering_distance_cols = "correlation", 
+                    fontsize = 14, show_rownames = T, cutree_rows = 5
+                    )
+
+after_clustering_order_IDs <- hm$tree_row$order
+cluster_attr <- cutree(hm$tree_row, k = 5)
+check <- data.frame(clustered_order = after_clustering_order_IDs)
+check$sorted_cluster_attr <- cluster_attr[check$clustered_order]
+check$sorted_cluster_attr #でheatmapと見比べる
+order0 <- data.frame(gene = rownames(dff), check)
+
+order0 <- order0 %>% filter(sorted_cluster_attr == "1")
+order0 %>% nrow() #[1] 75
+# ここで選択すべき遺伝子が決定された
+# ついで抽出
+df <- df %>% filter(gene %in% order0$gene)
+
+df$group <- ifelse(df$auth == "SN-1", "hSN", "hMLO")
+df$group <- factor(df$group, levels = c("hSN", "hMLO"))
+df$auth <- factor(df$auth, levels = final2) %>% fct_rev
+df$gene <- factor(df$gene, levels = order0$gene)
+
+
+dev.new(width=16, height=3)
+ggplot(df, aes(x = gene, y = auth, color = -avg_log2FC, size = -log(p_val_adj))) +
+        geom_point(alpha = 1) +
+        facet_grid(group ~ ., scales ="free", space = "free") +
+        scale_size(breaks = c(0, 10, 100), range = c(2, 12))+
+        scale_color_gradient2(low = "orangered1", mid = "gray55", high = "turquoise4", midpoint = 0.2, limits = c(-3, 3)) +
+   labs(x=NULL, y=NULL, title="Signaling by GPCR", color = "-FC", size = "-log(adjP)") + 
+          theme_classic() +
+          theme(
+          title=element_text(size =13, face = "bold"),
+            legend.key.height = unit(0.4, 'cm'),
+            legend.text=element_text(size =12),
+            axis.text.x=element_text(size=10, angle = 45, hjust = 1), 
+            axis.text.y=element_text(size=15), 
+            axis.title=element_text(size=15)) 
+ggsave(file = "SignalingGPCR.png")
+dev.off()
+##################################################################################################
+library(magick)
+
+img1 <- image_read("dop_trans.png") %>% image_resize(geometry = "1500x")
+img2 <- image_read("l1_retro.png") %>% image_resize(geometry = "1500x")
+img3 <- image_read("SignalingGPCR.png") %>% image_resize(geometry = "1500x")
+
+
+img1 <- image_annotate(img1, text = "A", location = "+0+0", size = 30, color = "black")
+img2 <- image_annotate(img2, text = "B", location = "+0+0", size = 30, color = "black")
+img3 <- image_annotate(img3, text = "C", location = "+0+0", size = 30, color = "black")
+
+img <- image_append(c(img1, img2, img3), stack = T)
+image_write(img, "suppl.png", format = "png")
+
+##################################################################################################
